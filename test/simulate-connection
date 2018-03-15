@@ -1,0 +1,2 @@
+{ "method": "login", "params": { "login": "adaxi", "pass": "x", "agent": "netcat" } }
+{ "id": "itsmemario", "method": "keepalived" }

@@ -1,0 +1,42 @@
+{
+  "name": "openpool",
+  "version": "1.0.0",
+  "description": "An open source mining pool for Monero",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/keyhash/openpool.git"
+  },
+  "keywords": [
+    "pool",
+    "mining",
+    "cryptocurrency",
+    "monero",
+    "crypto",
+    "currency",
+    "nodejs",
+    "server",
+    "stratum"
+  ],
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/keyhash/openpool/issues"
+  },
+  "homepage": "https://github.com/keyhash/openpool#readme",
+  "devDependencies": {
+    "standard": "^11.0.0"
+  },
+  "dependencies": {
+    "bignum": "github:adaxi/node-bignum",
+    "circular-buffer": "^1.0.2",
+    "cryptonote-util": "github:keyhash/node-cryptonote-util",
+    "ini": "^1.3.5",
+    "joi": "^13.1.2",
+    "request": "^2.85.0",
+    "request-promise-native": "^1.0.5"
+  }
+}
