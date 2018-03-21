@@ -2,21 +2,12 @@
 
 const Joi = require('joi')
 const EventEmitter = require('events')
+const Debug = require('debug')
+const logger = new Debug('stratum-connection')
 
 const RPC_MESSAGE_SCHEMA = Joi.object({
-  id: Joi.string()
-    .when('method', {
-      is: 'getjob',
-      then: Joi.string().required()
-    })
-    .when('submit', {
-      is: 'keepalived',
-      then: Joi.string().required()
-    })
-    .when('method', {
-      is: 'keepalived',
-      then: Joi.string().required()
-    }),
+  id: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
+  jsonrpc: Joi.string().valid(['2.0']),
   method: Joi.string().valid(['login', 'getjob', 'submit', 'keepalived']).required(),
   params: Joi.object()
     .when('method', {
@@ -29,25 +20,28 @@ const RPC_MESSAGE_SCHEMA = Joi.object({
     })
     .when('method', {
       is: 'getjob',
-      then: Joi.object().keys([])
+      then: Joi.object({
+        id: Joi.string().uuid({ version: ['uuidv4'] }).required()
+      }).keys(['id'])
     })
     .when('method', {
       is: 'submit',
       then: Joi.object({
+        id: Joi.string().uuid({ version: ['uuidv4'] }).required(),
         job_id: Joi.string().required(),
-        nonce: Joi.string().required(),
-        poolNonce: Joi.string(),
-        workerNonce: Joi.string(),
+        nonce: Joi.string().alphanum().length(8).lowercase().required(),
         result: Joi.string()
       }).required()
     })
     .when('method', {
       is: 'keepalived',
-      then: Joi.object().keys([])
+      then: Joi.object({
+        id: Joi.string().uuid({ version: ['uuidv4'] }).required()
+      }).keys(['id'])
     })
 })
 
-const defaults = { jsonrpc: '2.0' }
+const responseDefaults = { jsonrpc: '2.0' }
 
 class StratumConnection extends EventEmitter {
   constructor (connection) {
@@ -63,18 +57,20 @@ class StratumConnection extends EventEmitter {
     this.onMessage = (data) => {
       try {
         const message = JSON.parse(data.toString())
+        logger('<= client', message)
         const result = Joi.validate(message, RPC_MESSAGE_SCHEMA)
         if (result.error) {
-          this.connection.stop(new Error('Failed to validate message'))
+          // @todo ban-check
+          this.connection.stop(new Error(`Failed to validate message: ${result.error}`))
         }
         const { value: { id, method, params } } = result
         this.emit('message', { id, method, params })
       } catch (err) {
-        this.connection.stop(new Error('Failed to parse message'))
+        this.connection.stop(new Error(`Failed to handle message: ${err}`))
       }
     }
     this.onStop = (reason) => {
-      console.error('error', reason)
+      console.error(`! connection stop: ${reason}`)
       this.stop(reason)
     }
     this.connection.on('message', this.onMessage)
@@ -84,7 +80,9 @@ class StratumConnection extends EventEmitter {
   }
 
   reply (message) {
-    this.connection.reply(JSON.stringify(Object.assign({}, defaults, message)))
+    const response = Object.assign({}, responseDefaults, message)
+    logger('=> server: ', response)
+    this.connection.reply(JSON.stringify(response))
   }
 
   stop (reason) {

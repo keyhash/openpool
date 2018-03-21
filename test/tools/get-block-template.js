@@ -1,8 +1,12 @@
 'use strict'
 
+/**
+ * This program allows to fetch a block template from the monero daemon.
+ */
+
 const RPC = require('../src/network/rpc')
 const rpc = new RPC({ uri: 'http://localhost:18081/json_rpc' })
-const wallet_address = '48Tk9eL8pLHWnKEJfocXQgcBcLkymp6mUKjxQgZXoR1riGjfjznsrLgNZMbfDeWC7hYY1qfHFTe7mFCRdbsvkfimLAq4AvB' // eslint-disable-line camelcase
+const wallet_address = '' // eslint-disable-line camelcase
 
 rpc.request('getblocktemplate', { reserve_size: 17, wallet_address })
   .then(response => {
