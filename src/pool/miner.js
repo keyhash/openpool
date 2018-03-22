@@ -16,8 +16,8 @@ class Miner extends EventEmitter {
     this.connection = connection
     this.hashCount = BASE_HASH_COUNT
 
-    this.lastBlockHeight = 0
-    this.lastHeartBeat = Date.now()
+    this.currentHeight = 0
+    this.heartbeat = Date.now()
     this.jobs = new CircularBuffer(4)
 
     this.connection.once('stop', reason => {
@@ -26,8 +26,8 @@ class Miner extends EventEmitter {
     })
   }
 
-  heartbeat () {
-    this.lastHeartBeat = Date.now()
+  ping () {
+    this.heartbeat = Date.now()
   }
 
   findJob (id) {
@@ -35,10 +35,10 @@ class Miner extends EventEmitter {
   }
 
   getJob (blockTemplate) {
-    if (this.lastBlockHeight === blockTemplate.height && this.jobs.get(0)) {
+    if (this.currentHeight === blockTemplate.height && this.jobs.get(0)) {
       return this.jobs.get(0).response
     }
-    const extraNonce = blockTemplate.setNextExtraNonce()
+    const extraNonce = this.coin.nonce
     const id = Crypto.pseudoRandomBytes(21).toString('base64')
     const job = {
       id,
@@ -47,7 +47,7 @@ class Miner extends EventEmitter {
       extraNonce,
       submissions: [],
       response: {
-        blob: blockTemplate.getBlockHashingBlock(),
+        blob: blockTemplate.getBlockHashingBlob(extraNonce).toString('hex'),
         job_id: id,
         target: this.coin.getTargetDifficulty(this.hashCount).toString('hex'),
         id: this.id

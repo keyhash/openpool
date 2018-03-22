@@ -64,7 +64,7 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
                 connection.reply({ error: 'Unauthenticated' })
                 return
               }
-              miner.heartbeat()
+              miner.ping()
               this.emit(method, message, miner)
             }
           })
@@ -92,7 +92,7 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
             miner.once('stop', (reason) => {
               this.miners.delete(miner.id)
             })
-            this.coin.getActiveBlockTemplate()
+            this.coin.getBlockTemplate()
               .then(blockTemplate =>
                 miner.connection.reply({
                   id,
@@ -121,7 +121,7 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
          * Searches for a new job to assign to the miner
          */
         this.on('getjob', (message, miner) => {
-          this.coin.getActiveBlockTemplate()
+          this.coin.getBlockTemplate()
             .then(blockTemplate =>
               miner.connection.reply({ jsonrpc: '2.0', method: 'job', params: miner.getJob(blockTemplate) })
             )
@@ -155,7 +155,7 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
             MinerStatistics.get(miner.address).incrementInvalid()
             miner.connection.reply({ id, jsonrpc: '2.0', error: 'Block expired' })
             // Send the miner a new task
-            this.coin.getActiveBlockTemplate()
+            this.coin.getBlockTemplate()
               .then(blockTemplate =>
                 miner.connection.reply({ jsonrpc: '2.0', method: 'job', params: miner.getJob(blockTemplate) })
               )
@@ -163,14 +163,12 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
           }
 
           // Process share
-          const blockBlob = this.coin.getBlockBlob(blockTemplate, Buffer.from(nonce, 'hex'), job.extraNonce)
-          // @todo: fake it until you can make it
-          // const bHash = this.coin.getBlockBlobHash(blockBlob)
-          const bHash = Buffer.from(result, 'hex')
-          if (bHash.toString('hex') !== result) {
+          const block = blockTemplate.getBlockBlob(Buffer.from(nonce, 'hex'), job.extraNonce)
+          const cheat = false // @todo: fake it until you can make it
+          if (cheat /* block.hash.toString('hex') !== result */) {
             miner.connection.reply({ id, jsonrpc: '2.0', error: 'Invalid share' })
             // @todo new-diff
-            this.coin.getActiveBlockTemplate()
+            this.coin.getBlockTemplate()
               .then(blockTemplate =>
                 miner.connection.reply({ jsonrpc: '2.0', method: 'job', params: miner.getJob(blockTemplate) })
               )
@@ -186,16 +184,16 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
             timestamp: Date.now()
           }
 
-          const difficulty = this.coin.getHashDifficulty(bHash)
+          const difficulty = this.coin.getHashDifficulty(Buffer.from(result, 'hex') /* block.hash */)
           logger(`! Submitted difficulty ${difficulty} blockTemplate.difficulty: ${blockTemplate.difficulty} job.hashCount: ${job.hashCount}`)
           if (difficulty.ge(blockTemplate.difficulty)) {
-            this.coin.submit(blockBlob)
+            this.coin.submit(block.blob)
               .then(response => {
                 logger(`@ Block found !`)
                 MinerStatistics.get(miner.address).incrementInvalid().incrementTotalHashes(job.hashCount)
                 Shares.get(job.height).set(Object.assign(share, { blockFound: true }))
                 Blocks.get(job.height).set({
-                  hash: this.coin.getBlockId(blockBlob),
+                  hash: block.id,
                   difficulty: blockTemplate.difficulty,
                   timestamp: Date.now(),
                   unlocked: false,

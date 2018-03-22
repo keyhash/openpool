@@ -66,6 +66,7 @@ class StratumConnection extends EventEmitter {
         const { value: { id, method, params } } = result
         this.emit('message', { id, method, params })
       } catch (err) {
+        // @todo: log stack trace here
         this.connection.stop(new Error(`Failed to handle message: ${err}`))
       }
     }
