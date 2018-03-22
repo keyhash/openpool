@@ -4,6 +4,8 @@
   "description": "An open source mining pool for Monero",
   "main": "index.js",
   "scripts": {
+    "lint": "node_modules/.bin/standard",
+    "lint-fix": "node_modules/.bin/standard --fix",
     "test": "jest"
   },
   "repository": {
