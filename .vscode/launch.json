@@ -11,7 +11,7 @@
             "name": "Launch Program",
             "program": "${workspaceFolder}/index.js",
             "env": {
-                "DEBUG": "pool,statistics,stratum-connection,coin"
+                "DEBUG": "pool,miner,statistics,stratum-connection,coin"
             }
         }
     ]

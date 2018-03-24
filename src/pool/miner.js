@@ -2,9 +2,12 @@
 
 const BASE_HASH_COUNT = 1000
 
-const Crypto = require('crypto')
 const CircularBuffer = require('circular-buffer')
 const EventEmitter = require('events')
+const Debug = require('debug')
+const logger = new Debug('miner')
+
+const Job = require('./job')
 
 class Miner extends EventEmitter {
   constructor (id, address, agent, coin, connection) {
@@ -26,35 +29,103 @@ class Miner extends EventEmitter {
     })
   }
 
+  login (id) {
+    this.coin.getBlockTemplate()
+      .then(blockTemplate =>
+        this.reply({ id, jsonrpc: '2.0', result: { id: this.id, job: this.createJob(blockTemplate), status: 'OK' } })
+      )
+  }
+
+  /**
+   * Sends the miner a keepalive message
+   *
+   * @param {Number} id identifier of the transaction
+   */
+  keepalived (id) {
+    this.reply({ id, jsonrpc: '2.0', result: { status: 'KEEPALIVED' } })
+  }
+
+  /**
+   * Handles the submission of a job by a miner
+   *
+   * @param {Number} id identifier of the miner request
+   * @param {Buffer} nonce nonce discovered by the miner
+   * @param {Buffer} result hash found by miner
+   * @returns {Promise.<Block>} returns the block if it was successfully submitted
+   */
+  submit (id, nonce, result) {
+    const trusted = true
+    return this.findJob(id)
+      .then(job => job.checkDuplicateSubmission(nonce))
+      .then(job => {
+        job.submissions.push(nonce)
+        return this.coin.getBlockTemplateByHeight(job.height)
+          .then(blockTemplate => Promise.all([
+            blockTemplate.getBlockBlob(nonce, job.extraNonce),
+            blockTemplate
+          ]))
+          .then(([block, blockTemplate]) => Promise.all([
+            trusted ? block : block.checkHashMatches(result),
+            blockTemplate
+          ]))
+          .then(([block, blockTemplate]) => {
+            const difficulty = this.coin.getHashDifficulty(result /* block.hash */)
+            logger(`[$] Submitted difficulty ${difficulty} required difficulty: ${blockTemplate.difficulty} job hashes: ${job.hashCount}`)
+            if (difficulty.ge(blockTemplate.difficulty)) {
+              return this.coin.submit(block)
+                .then(() => { logger(`[$] Block found !`) })
+                .then(() => block)
+                .catch(err => { logger(`[$] Block found but failed to submit ! ${err.stack}`) })
+            } else if (difficulty.lt(job.hashCount)) {
+              return Promise.reject(new Error('Low difficulty share'))
+            }
+            // valid share, but no luck!
+          })
+      })
+  }
+
+  sendJob () {
+    this.coin.getBlockTemplate()
+      .then(blockTemplate =>
+        this.reply({ jsonrpc: '2.0', method: 'job', params: this.createJob(blockTemplate) })
+      )
+  }
+
+  reply (message) {
+    if (this.connection) {
+      this.connection.reply(message)
+    }
+  }
+
   ping () {
     this.heartbeat = Date.now()
   }
 
+  /**
+   * Looks up the given job in the list of the jobs of the miner.
+   *
+   * @param {String} id the job id
+   * @returns {Promise.<Job>} the job
+   */
   findJob (id) {
-    return this.jobs.toarray().find(job => job.id === id)
+    return new Promise((resolve, reject) => {
+      const job = this.jobs.toarray().find(job => job.id === id)
+      if (job) {
+        resolve(job)
+      } else {
+        reject(new Error('Invalid job id'))
+      }
+    })
   }
 
-  getJob (blockTemplate) {
+  createJob (blockTemplate) {
     if (this.currentHeight === blockTemplate.height && this.jobs.get(0)) {
       return this.jobs.get(0).response
     }
-    const extraNonce = this.coin.nonce
-    const id = Crypto.pseudoRandomBytes(21).toString('base64')
-    const job = {
-      id,
-      hashCount: this.hashCount,
-      height: blockTemplate.height,
-      extraNonce,
-      submissions: [],
-      response: {
-        blob: blockTemplate.getBlockHashingBlob(extraNonce).toString('hex'),
-        job_id: id,
-        target: this.coin.getTargetDifficulty(this.hashCount).toString('hex'),
-        id: this.id
-      }
-    }
+    const target = this.coin.getTargetDifficulty(this.hashCount).toString('hex')
+    const job = new Job(this.id, blockTemplate, this.coin.nonce, this.hashCount, target)
     this.jobs.enq(job)
-    return job.response
+    return job.task
   }
 }
 

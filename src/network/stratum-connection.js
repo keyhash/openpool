@@ -67,12 +67,12 @@ class StratumConnection extends EventEmitter {
         this.emit('message', { id, method, params })
       } catch (err) {
         // @todo: log stack trace here
-        this.connection.stop(new Error(`Failed to handle message: ${err}`))
+        this.connection.stop(new Error(`Failed to handle message: ${err.stack}`))
       }
     }
-    this.onStop = (reason) => {
-      console.error(`! connection stop: ${reason}`)
-      this.stop(reason)
+    this.onStop = (err) => {
+      console.error(`! connection stop: ${err.stack}`)
+      this.stop(err)
     }
     this.connection.on('message', this.onMessage)
     this.connection.once('stop', this.onStop)

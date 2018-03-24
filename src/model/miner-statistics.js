@@ -27,12 +27,12 @@ module.exports = function (database) {
       return new MinerStatistics(address)
     }
 
-    incrementInvalid (increment = 1) {
+    invalid (increment = 1) {
       incr(`invalid-shares@${this.address}`, increment)
       return this
     }
 
-    incrementValid (increment = 1) {
+    valid (increment = 1) {
       incr(`good-shares@${this.address}`, increment)
       return this
     }

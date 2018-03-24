@@ -8,7 +8,7 @@ const logger = Debug('coin')
 
 const TEMPLATE_INTERVAL = 2000
 
-class Coin extends EventEmitter {
+class AbstractCoin extends EventEmitter {
   constructor (blockTemplateRefreshInterval = TEMPLATE_INTERVAL) {
     super()
     this.blockTemplate = null
@@ -39,7 +39,7 @@ class Coin extends EventEmitter {
     setInterval(() => {
       this._getBlockTemplate()
         .then(blockTemplate => {
-          logger('# Fetched new block template')
+          logger('[$] Fetched new block template')
           if (!this.blockTemplate || (blockTemplate.height !== this.blockTemplate.height)) {
             this.blockTemplates.enq(blockTemplate)
             this.blockTemplate = blockTemplate
@@ -51,8 +51,7 @@ class Coin extends EventEmitter {
           }
         })
         .catch((err) => {
-          console.log(err)
-          logger(`! Failed to obtain the last block template: ${err}`)
+          logger(`[!] Failed to obtain the last block template: ${err.stack}`)
         })
     }, this.blockTemplateRefreshInterval)
   }
@@ -60,7 +59,7 @@ class Coin extends EventEmitter {
   /**
    * Fetches the most recent block template form the coin daemon
    *
-   * @returns {BlockTemplate} block template
+   * @returns {Promise.<BlockTemplate>} block template
    */
   _getBlockTemplate () { // Promise
     throw new Error('Subclass failed to implement method.')
@@ -72,8 +71,15 @@ class Coin extends EventEmitter {
       : new Promise((resolve, reject) => { this.defer = resolve })
   }
 
-  getBlockTemplates () {
-    return this.blockTemplates.toarray()
+  getBlockTemplateByHeight (height) {
+    return new Promise((resolve, reject) => {
+      const blockTemplate = this.blockTemplates.toarray().find(blockTemplate => blockTemplate.height === height)
+      if (blockTemplate) {
+        resolve(blockTemplate)
+      } else {
+        reject(new Error('Block expired'))
+      }
+    })
   }
 
   getHashDifficulty (bHash) {
@@ -111,4 +117,4 @@ class Coin extends EventEmitter {
   }
 }
 
-module.exports = Coin
+module.exports = AbstractCoin
