@@ -12,10 +12,10 @@ lint-fix: node_modules
 test: node_modules
 	npm test
 
-build-test-net:
-	docker build --tag="openpool/test-net" test/tools/test-net
+build-monero-test-net:
+	docker build --tag="openpool/monero-test-net" test/tools/monero-test-net
 
-test-net:
+monero-test-net:
 	docker run \
 		-p 28080:28080 \
 		-p 28081:28081 \
@@ -23,4 +23,23 @@ test-net:
 		-p 38080:38080 \
 		-p 38081:38081 \
 		-p 38082:38082 \
-		openpool/test-net
+		openpool/monero-test-net
+
+build-miner:
+	docker build --tag="openpool/xmrig" test/tools/xmrig
+
+miner:
+	docker run \
+		--read-only -m 50M \
+		--cpu-shares 256 \
+		openpool/xmrig \
+		--url=172.17.42.1:31415 \
+		--user=481G669KZ2fGeeTVyBUdgvTh1WufoPtSUTwsnD5fKCNNTSVkBemWTnedXZMMfmMcZsDdCXcGyeadPijRxNYDKS4JGSCbwzP \
+		--pass=x \
+		--keepalive \
+		--donate-level=1 \
+		--max-cpu-usage 25 \
+		--no-huge-pages \
+		--threads=1 \
+		--print-time=5
+
