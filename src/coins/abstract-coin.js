@@ -11,6 +11,7 @@ const TEMPLATE_INTERVAL = 2000
 class AbstractCoin extends EventEmitter {
   constructor (blockTemplateRefreshInterval = TEMPLATE_INTERVAL) {
     super()
+    this.blockHeader = null
     this.blockTemplate = null
     this.blockTemplates = new CircularBuffer(4)
     this.blockTemplateRefreshInterval = blockTemplateRefreshInterval
@@ -39,19 +40,31 @@ class AbstractCoin extends EventEmitter {
     setInterval(() => {
       this._getBlockTemplate()
         .then(blockTemplate => {
-          logger('[$] Fetched new block template')
           if (!this.blockTemplate || (blockTemplate.height !== this.blockTemplate.height)) {
+            logger('[$] Fetched new block template')
             this.blockTemplates.enq(blockTemplate)
             this.blockTemplate = blockTemplate
-            if (this.defer) {
-              this.defer(blockTemplate)
-              this.defer = null
+            if (this.deferBlockTemplate) {
+              this.deferBlockTemplate(blockTemplate)
+              this.deferBlockTemplate = null
             }
             this.emit('blockTemplate', this.blockTemplate)
           }
         })
         .catch((err) => {
           logger(`[!] Failed to obtain the last block template: ${err.stack}`)
+        })
+      this._getLastBlockHeader()
+        .then(blockHeader => {
+          if (!this.blockHeader || (blockHeader.height !== this.blockHeader.height)) {
+            logger('[$] Fetched new block header')
+            this.blockHeader = blockHeader
+            if (this.deferBlockHeader) {
+              this.deferBlockHeader(blockHeader)
+              this.deferBlockHeader = null
+            }
+            this.emit('blockHeader', this.blockHeader)
+          }
         })
     }, this.blockTemplateRefreshInterval)
   }
@@ -65,10 +78,19 @@ class AbstractCoin extends EventEmitter {
     throw new Error('Subclass failed to implement method.')
   }
 
+  /**
+   * Fetches the most recent block template form the coin daemon
+   *
+   * @returns {Promise.<BlockHeader>} block template
+   */
+  _getLastBlockHeader () {
+    throw new Error('Subclass failed to implement method.')
+  }
+
   getBlockTemplate () {
     return this.blockTemplate
       ? Promise.resolve(this.blockTemplate)
-      : new Promise((resolve, reject) => { this.defer = resolve })
+      : new Promise((resolve, reject) => { this.deferBlockTemplate = resolve })
   }
 
   getBlockTemplateByHeight (height) {
@@ -80,6 +102,20 @@ class AbstractCoin extends EventEmitter {
         reject(new Error('Block expired'))
       }
     })
+  }
+
+  getBlockHeaderByHeight () {
+    throw new Error('Subclass failed to implement method.')
+  }
+
+  getBlockHeaderByHash () {
+    throw new Error('Subclass failed to implement method.')
+  }
+
+  getLastBlockHeader () {
+    return this.blockHeader
+      ? Promise.resolve(this.blockHeader)
+      : new Promise((resolve, reject) => { this.deferBlockHeader = resolve })
   }
 
   getHashDifficulty (bHash) {

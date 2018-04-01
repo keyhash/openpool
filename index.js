@@ -13,13 +13,19 @@ lmdb.start()
 
 const Model = require('./src/model')(lmdb)
 const Pool = require('./src/pool')(Model)
-console.log(configuration.monero)
+// const Payments = require('./src/payments')(Model)
+
 const rpc = new RPC(configuration.monero)
 const monero = new Monero(configuration.monero.address, rpc)
 monero.start()
 
 const pool = new Pool(configuration.pool, monero, Model)
 pool.start()
-  .then((pool) => {
+  .then(pool => {
     console.log(pool)
   })
+
+/*
+const payments = new Payments(configuration.payments, monero)
+payments.start()
+*/

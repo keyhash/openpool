@@ -1,7 +1,11 @@
 'use strict'
 
+const Cursor = require('node-lmdb').Cursor
+const Debug = require('debug')
+const logger = Debug('blocks')
+
 module.exports = function (database) {
-  const blocks = database.register({
+  const db = database.register({
     name: 'blocks',
     create: true,
     integerKey: true,
@@ -9,19 +13,43 @@ module.exports = function (database) {
   })
 
   class Blocks {
-    constructor (height) {
-      this.height = height
-    }
-
     static get (height) {
-      return new Blocks(height)
     }
 
-    set (data) {
+    static getValid (callback) {
+      if (typeof callback !== 'function') {
+        return
+      }
+      const transaction = database.lmdb.beginTxn({readOnly: true})
+      try {
+        const cursor = new Cursor(transaction, db)
+        for (let i = cursor.goToFirst(); i; i = cursor.goToNext()) {
+          cursor.getCurrentString((key, json) => {
+            const block = JSON.parse(json)
+            if (block.locked) {
+              callback(block)
+            }
+          })
+        }
+        cursor.close()
+        transaction.commit()
+      } catch (err) {
+        logger(`Failed to get valid blocks: ${err.stack}`)
+        transaction.abort()
+        throw err
+      }
+    }
+
+    static set (block) {
       const transaction = database.lmdb.beginTxn()
-      transaction.putString(blocks, this.height, JSON.stringify(data))
-      transaction.commit()
-      return this
+      try {
+        transaction.putString(db, block.height, JSON.stringify(block))
+        transaction.commit()
+      } catch (err) {
+        logger(`Failed to store block: ${err.stack}`)
+        transaction.abort()
+        throw err
+      }
     }
   }
 

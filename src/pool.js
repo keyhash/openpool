@@ -5,13 +5,17 @@ const Uuid = require('uuid/v4')
 const EventEmitter = require('events')
 
 const Debug = require('debug')
-const logger = new Debug('pool')
-const statistics = new Debug('statistics')
+const logger = Debug('pool')
+const statistics = Debug('statistics')
 
 const Miner = require('./pool/miner')
 
 const Connection = require('./network/connection')
 const StratumConnection = require('./network/stratum-connection')
+
+const MINER_PRUNE_INTERVAL = 120 * 1000
+const MINER_MAX_INACTIVITY = 180 * 1000
+const MINER_HASH_COUNT_UPDATE = 15 * 1000
 
 module.exports = function ({ Blocks, MinerStatistics, Shares }) {
   class Pool extends EventEmitter {
@@ -33,6 +37,23 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
             connection.reply({ method: 'job', params: miner.createJob(blockTemplate) })
           })
         })
+
+        setInterval(() => {
+          let inactiveMiners = 0
+          this.minerPool.forEach((miner, id) => {
+            if (Date.now() - miner.heartbeat > MINER_MAX_INACTIVITY) {
+              this.minerPool.delete(id)
+              inactiveMiners++
+            }
+          })
+          if (inactiveMiners) {
+            logger(`[!] Pruned ${inactiveMiners} inactive miners.`)
+          }
+        }, MINER_PRUNE_INTERVAL)
+
+        setInterval(() => {
+          this.minerPool.forEach(miner => miner.updateDifficulty())
+        }, MINER_HASH_COUNT_UPDATE)
 
         const onStartup = (reason) => {
           if (reason) {
@@ -112,9 +133,11 @@ module.exports = function ({ Blocks, MinerStatistics, Shares }) {
          */
         this.on('submit', ({ id, params: { job_id, nonce, result } }, miner) => { // eslint-disable-line camelcase
           miner.submit(job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
-            .then(() => {
-              /* Store share */
-              /* Store block */
+            .then(([share, block]) => {
+              if (block) {
+                Blocks.set(block) // Storing block
+              }
+              Shares.set(share)
               MinerStatistics.get(miner.address).valid()
               miner.reply({ id, jsonrpc: '2.0', result: { status: 'OK' } })
               miner.sendJob()

@@ -1,6 +1,7 @@
 'use strict'
 
-const BASE_HASH_COUNT = 1000
+const STARTING_HASH_COUNT = 1000 // hashes
+const TARGET_JOB_DURATION = 30 // seconds
 
 const CircularBuffer = require('circular-buffer')
 const EventEmitter = require('events')
@@ -8,6 +9,7 @@ const Debug = require('debug')
 const logger = new Debug('miner')
 
 const Job = require('./job')
+const Share = require('./share')
 
 class Miner extends EventEmitter {
   constructor (id, address, agent, coin, connection) {
@@ -17,11 +19,14 @@ class Miner extends EventEmitter {
     this.agent = agent
     this.coin = coin
     this.connection = connection
-    this.hashCount = BASE_HASH_COUNT
+    this.currentHashCount = STARTING_HASH_COUNT
 
     this.currentHeight = 0
     this.heartbeat = Date.now()
     this.jobs = new CircularBuffer(4)
+
+    this.connectionTimestamp = Date.now()
+    this.totalHashCount = 0
 
     this.connection.once('stop', reason => {
       this.emit('stop', reason)
@@ -61,7 +66,7 @@ class Miner extends EventEmitter {
         job.submissions.push(nonce)
         return this.coin.getBlockTemplateByHeight(job.height)
           .then(blockTemplate => Promise.all([
-            blockTemplate.getBlockBlob(nonce, job.extraNonce),
+            blockTemplate.getBlock(nonce, job.extraNonce, result /* only when trusted */),
             blockTemplate
           ]))
           .then(([block, blockTemplate]) => Promise.all([
@@ -70,16 +75,26 @@ class Miner extends EventEmitter {
           ]))
           .then(([block, blockTemplate]) => {
             const difficulty = this.coin.getHashDifficulty(result /* block.hash */)
+            const share = new Share(job.height, this.address, job.hashCount, result /* block.hash */)
             logger(`[$] Submitted difficulty ${difficulty} required difficulty: ${blockTemplate.difficulty} job hashes: ${job.hashCount}`)
             if (difficulty.ge(blockTemplate.difficulty)) {
+              this.totalHashCount += job.hashCount
               return this.coin.submit(block)
-                .then(() => { logger(`[$] Block found !`) })
-                .then(() => block)
-                .catch(err => { logger(`[$] Block found but failed to submit ! ${err.stack}`) })
+                .then(() => {
+                  share.match = true
+                  logger(`[$] Block found !`)
+                })
+                .then(() => ([share, block]))
+                .catch(err => {
+                  logger(`[$] Block found but failed to submit ! ${err.stack}`)
+                  return [share]
+                })
             } else if (difficulty.lt(job.hashCount)) {
               return Promise.reject(new Error('Low difficulty share'))
+            } else {
+              this.totalHashCount += job.hashCount
             }
-            // valid share, but no luck!
+            return [share]
           })
       })
   }
@@ -122,10 +137,16 @@ class Miner extends EventEmitter {
     if (this.currentHeight === blockTemplate.height && this.jobs.get(0)) {
       return this.jobs.get(0).response
     }
-    const target = this.coin.getTargetDifficulty(this.hashCount).toString('hex')
-    const job = new Job(this.id, blockTemplate, this.coin.nonce, this.hashCount, target)
+    const target = this.coin.getTargetDifficulty(this.currentHashCount).toString('hex')
+    const job = new Job(this.id, blockTemplate, this.coin.nonce, this.currentHashCount, target)
     this.jobs.enq(job)
     return job.task
+  }
+
+  updateDifficulty () {
+    if (this.totalHashCount > 0) {
+      this.currentHashCount = Math.floor(this.totalHashCount / (Math.floor((Date.now() - this.connectionTimestamp) / 1000)) * TARGET_JOB_DURATION)
+    }
   }
 }
 

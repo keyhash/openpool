@@ -3,7 +3,7 @@
 const Joi = require('joi')
 const EventEmitter = require('events')
 const Debug = require('debug')
-const logger = new Debug('stratum-connection')
+const logger = Debug('stratum-connection')
 
 const RPC_MESSAGE_SCHEMA = Joi.object({
   id: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
@@ -71,7 +71,7 @@ class StratumConnection extends EventEmitter {
       }
     }
     this.onStop = (err) => {
-      console.error(`! connection stop: ${err.stack}`)
+      logger(`! connection stop: ${err.stack}`)
       this.stop(err)
     }
     this.connection.on('message', this.onMessage)

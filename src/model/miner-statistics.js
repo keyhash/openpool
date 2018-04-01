@@ -1,21 +1,30 @@
 'use strict'
 
+const Debug = require('debug')
+const logger = Debug('miner-statistics')
+
 module.exports = function (database) {
-  const minerStatistics = database.register({
+  const db = database.register({
     name: 'miner-statistics',
     create: true
   })
 
   function incr (key, increment) {
     const transaction = database.lmdb.beginTxn()
-    let shares = transaction.getNumber(minerStatistics, key)
-    if (typeof shares === 'number') {
-      shares += increment
-    } else {
-      shares = 1
+    try {
+      let value = transaction.getNumber(db, key)
+      if (typeof value === 'number') {
+        value += increment
+      } else {
+        value = 1
+      }
+      transaction.putNumber(db, key, value)
+      transaction.commit()
+    } catch (err) {
+      logger(`Failed to store miner-statistics: ${err.stack}`)
+      transaction.abort()
+      throw err
     }
-    transaction.putNumber(minerStatistics, key, shares)
-    transaction.commit()
   }
 
   class MinerStatistics {
