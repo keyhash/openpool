@@ -1,0 +1,9 @@
+{
+  "name": "payments",
+  "version": "1.0.0",
+  "description": "Processes shares and generates payments",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT",
+  "dependencies": [ "coins", "model" ]
+}

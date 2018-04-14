@@ -57,7 +57,7 @@ class StratumConnection extends EventEmitter {
     this.onMessage = (data) => {
       try {
         const message = JSON.parse(data.toString())
-        logger('<= client', message)
+        logger('[<] client', message)
         const result = Joi.validate(message, RPC_MESSAGE_SCHEMA)
         if (result.error) {
           // @todo ban-check
@@ -82,7 +82,7 @@ class StratumConnection extends EventEmitter {
 
   reply (message) {
     const response = Object.assign({}, responseDefaults, message)
-    logger('=> server: ', response)
+    logger('[>] server: ', response)
     this.connection.reply(JSON.stringify(response))
   }
 

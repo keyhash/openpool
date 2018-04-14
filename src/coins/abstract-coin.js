@@ -87,13 +87,13 @@ class AbstractCoin extends EventEmitter {
     throw new Error('Subclass failed to implement method.')
   }
 
-  getBlockTemplate () {
+  async getBlockTemplate () {
     return this.blockTemplate
       ? Promise.resolve(this.blockTemplate)
       : new Promise((resolve, reject) => { this.deferBlockTemplate = resolve })
   }
 
-  getBlockTemplateByHeight (height) {
+  async getBlockTemplateByHeight (height) {
     return new Promise((resolve, reject) => {
       const blockTemplate = this.blockTemplates.toarray().find(blockTemplate => blockTemplate.height === height)
       if (blockTemplate) {
@@ -104,15 +104,15 @@ class AbstractCoin extends EventEmitter {
     })
   }
 
-  getBlockHeaderByHeight () {
+  async getBlockHeaderByHeight () {
     throw new Error('Subclass failed to implement method.')
   }
 
-  getBlockHeaderByHash () {
+  async getBlockHeaderByHash () {
     throw new Error('Subclass failed to implement method.')
   }
 
-  getLastBlockHeader () {
+  async getLastBlockHeader () {
     return this.blockHeader
       ? Promise.resolve(this.blockHeader)
       : new Promise((resolve, reject) => { this.deferBlockHeader = resolve })

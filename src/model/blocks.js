@@ -1,57 +1,37 @@
 'use strict'
 
-const Cursor = require('node-lmdb').Cursor
-const Debug = require('debug')
-const logger = Debug('blocks')
+const { STRING, INTEGER, BIGINT, BOOLEAN, Op: { gte } } = require('sequelize')
 
-module.exports = function (database) {
-  const db = database.register({
-    name: 'blocks',
-    create: true,
-    integerKey: true,
-    keyIsUint32: true
+module.exports = (sequelize, options) => {
+  const Blocks = sequelize.define('Blocks', {
+    hash: {
+      type: STRING,
+      allowNull: false
+    },
+    height: {
+      type: INTEGER,
+      allowNull: false,
+      validate: { min: 0 }
+    },
+    difficulty: {
+      type: BIGINT,
+      allowNull: false,
+      validate: { min: 0 }
+    },
+    locked: {
+      type: BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    }
+  }, {
+    paranoid: false,
+    updatedAt: false
   })
-
-  class Blocks {
-    static get (height) {
-    }
-
-    static getValid (callback) {
-      if (typeof callback !== 'function') {
-        return
-      }
-      const transaction = database.lmdb.beginTxn({readOnly: true})
-      try {
-        const cursor = new Cursor(transaction, db)
-        for (let i = cursor.goToFirst(); i; i = cursor.goToNext()) {
-          cursor.getCurrentString((key, json) => {
-            const block = JSON.parse(json)
-            if (block.locked) {
-              callback(block)
-            }
-          })
-        }
-        cursor.close()
-        transaction.commit()
-      } catch (err) {
-        logger(`Failed to get valid blocks: ${err.stack}`)
-        transaction.abort()
-        throw err
-      }
-    }
-
-    static set (block) {
-      const transaction = database.lmdb.beginTxn()
-      try {
-        transaction.putString(db, block.height, JSON.stringify(block))
-        transaction.commit()
-      } catch (err) {
-        logger(`Failed to store block: ${err.stack}`)
-        transaction.abort()
-        throw err
-      }
-    }
+  Blocks.getValid = (height) => {
+    return Blocks.findAll({
+      where: { locked: true, height: { [gte]: height } },
+      order: [ ['height', 'ASC'] ]
+    })
   }
-
   return Blocks
 }

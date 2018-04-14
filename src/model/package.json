@@ -1,0 +1,9 @@
+{
+  "name": "model",
+  "version": "1.0.0",
+  "description": "Provides a persistence layer for pool objects",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT",
+  "dependencies": [ "database" ]
+}

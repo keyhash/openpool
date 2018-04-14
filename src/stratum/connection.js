@@ -65,10 +65,10 @@ class Connection extends EventEmitter {
       buffer.copy(this.buffer, 0, pos)
     }
     this.onClose = () => {
-      this.stop(`Remote party closed connection.`)
+      this.stop(`[!] Remote party closed connection.`)
     }
     this.onError = (err) => {
-      console.error(`Connection error: ${err.stack}`)
+      console.error(`[!] Connection error: ${err.stack}`)
     }
     this.socket.on('data', this.onData)
     this.socket.on('close', this.onClose)

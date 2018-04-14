@@ -1,0 +1,8 @@
+{
+  "name": "pool",
+  "version": "1.0.0",
+  "description": "Handles miners and jobs",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT"
+}

@@ -4,7 +4,7 @@ const Request = require('request-promise-native')
 
 class RPC {
   constructor (options) {
-    const { uri, authorization: { username, password } = {} } = options
+    const { uri, username, password } = options
     this.defaults = {
       method: 'POST',
       uri,
@@ -15,14 +15,18 @@ class RPC {
         auth: {
           user: username,
           pass: password,
-          sendImmediately: true
+          sendImmediately: false
         }
       })
     }
   }
   request (method, params) {
     const body = { id: '0', jsonrpc: '2.0', method, params }
-    return Request(Object.assign({}, this.defaults, { body }))
+    const options = Object.assign({}, this.defaults, { body })
+    if (method === 'transfer') {
+      console.log(JSON.stringify(options))
+    }
+    return Request(options)
   }
 }
 

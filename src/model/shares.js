@@ -1,54 +1,50 @@
 'use strict'
 
-const Cursor = require('node-lmdb').Cursor
-const Debug = require('debug')
-const logger = new Debug('shares')
+const { STRING, INTEGER, BOOLEAN } = require('sequelize')
 
-module.exports = function (database) {
-  const db = database.register({
-    name: 'shares',
-    create: true,
-    dupSort: true,
-    dupFixed: false,
-    integerDup: true,
-    integerKey: true,
-    keyIsUint32: true
+module.exports = (sequelize, options) => {
+  let minimumHeight = 0
+
+  const Shares = sequelize.define('Shares', {
+    height: {
+      type: INTEGER,
+      allowNull: false
+    },
+    address: {
+      type: STRING,
+      allowNull: false
+    },
+    hashCount: {
+      type: INTEGER,
+      allowNull: false,
+      defaultValue: 0
+    },
+    match: {
+      type: BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    }
+  }, {
+    paranoid: false,
+    updatedAt: false,
+    hooks: {
+      afterBulkDestroy: async (options) => {
+        minimumHeight = await Shares.min('height')
+      }
+    }
   })
 
-  class Shares {
-    constructor (height) {
-      this.height = height
+  Shares.getByHeight = async (height) => {
+    if (minimumHeight === 0) {
+      minimumHeight = await Shares.min('height')
     }
-
-    static get (height, callback) {
-      const transaction = database.lmdb.beginTxn({readOnly: true})
-      try {
-        const cursor = new Cursor(transaction, db)
-        for (let i = cursor.goToRange(height) === height; i; i = cursor.goToNextDup()) {
-          cursor.getCurrentBinary(function (key, json) {
-            const share = JSON.parse(json)
-            callback(share)
-          })
-        }
-        cursor.close()
-        transaction.commit()
-      } catch (err) {
-        logger(`Failed to get valid blocks: ${err.stack}`)
-        transaction.abort()
-        throw err
-      }
-    }
-
-    static set (share) {
-      const transaction = database.lmdb.beginTxn()
-      try {
-        transaction.putBinary(db, share.height, Buffer.from(JSON.stringify(share)))
-        transaction.commit()
-      } catch (err) {
-        logger(`Failed to store share: ${err.stack}`)
-        transaction.abort()
-        throw err
-      }
+    if (height >= minimumHeight) {
+      return Shares.findAll({
+        where: { height },
+        raw: true
+      })
+    } else {
+      return []
     }
   }
 

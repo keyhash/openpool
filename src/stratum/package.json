@@ -1,0 +1,8 @@
+{
+  "name": "stratum",
+  "version": "1.0.0",
+  "description": "Provides server that handles miner connections",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT"
+}

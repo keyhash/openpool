@@ -9,13 +9,57 @@ const AbstractCoin = require('./abstract-coin')
 
 const INSTANCE_ID = Crypto.randomBytes(4)
 
+const TRANSACTION_FEE = 0.11 // configurable
+const TRANSACTION_FEE_LIMIT = 4
+const PAYMENT_THRESHOLD = 1
+
 class Monero extends AbstractCoin {
-  constructor (address, daemonRpc) {
+  constructor ({ address }, daemonRpc, walletRpc) {
     super()
     this.address = address // pool address
     this.daemon = daemonRpc
+    this.wallet = walletRpc
     this.significantDigits = 1000000000000
     this.code = 'XMR'
+    this.transactionFee = TRANSACTION_FEE * this.significantDigits
+  }
+
+  transfer (transferRequest) {
+    return this.wallet
+      .request('transfer', transferRequest)
+      .then(response => {
+        if (response.error) {
+          throw new Error(response.error.message)
+        }
+        return response.result
+      })
+  }
+
+  getMaxmimumDestinationsPerTransaction () {
+    return 120
+  }
+
+  getPaymentThreshold () {
+    return PAYMENT_THRESHOLD
+  }
+
+  getTransactionFee (amount) {
+    if (amount <= PAYMENT_THRESHOLD) {
+      return this.transactionFee
+    } else if (amount <= TRANSACTION_FEE_LIMIT) {
+      let x = this.transactionFee / (TRANSACTION_FEE_LIMIT - PAYMENT_THRESHOLD)
+      return this.transactionFee - ((amount - PAYMENT_THRESHOLD) * x)
+    } else {
+      return 0
+    }
+  }
+
+  fromAtomicUnits (amount) {
+    return amount / this.significantDigits
+  }
+
+  toAtomicUnits (amount) {
+    return amount * this.significantDigits
   }
 
   /**
@@ -42,7 +86,7 @@ class Monero extends AbstractCoin {
       .then(blockTemplate => new BlockTemplate(blockTemplate))
   }
 
-  getBlockHeaderByHeight (height) {
+  async getBlockHeaderByHeight (height) {
     return this.daemon
       .request('getblockheaderbyheight', { height })
       .then(response => {
@@ -54,7 +98,7 @@ class Monero extends AbstractCoin {
       .then(blockHeader => new BlockHeader(blockHeader))
   }
 
-  getBlockHeaderByHash (hash) {
+  async getBlockHeaderByHash (hash) {
     return this.daemon
       .request('getblockheaderbyhash', { hash })
       .then(response => {

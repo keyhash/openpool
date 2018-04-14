@@ -1,0 +1,8 @@
+{
+  "name": "coins",
+  "version": "1.0.0",
+  "description": "Exposes an SDK for Monero based coins",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT"
+}
