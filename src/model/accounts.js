@@ -49,9 +49,10 @@ module.exports = (sequelize, options) => {
     paranoid: false
   })
 
-  Accounts.getAccountsForPayment = (paymentThreshold) => {
+  Accounts.getAccountsForPayment = (coinCode, paymentThreshold) => {
     return Accounts.findAll(
       { where: { [and]: [
+        { coinCode },
         { balance: { [gte]: paymentThreshold } },
         { balance: { [gte]: { [col]: 'paymentThreshold' } } }
       ] } })

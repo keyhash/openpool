@@ -28,6 +28,12 @@ class Connection extends EventEmitter {
     }
   }
 
+  get remoteAddress () {
+    if (this.socket) {
+      return this.socket.remoteAddress
+    }
+  }
+
   reply (data) {
     if (!this.socket.writable) {
       // @todo stop connection ?

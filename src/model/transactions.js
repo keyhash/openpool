@@ -1,6 +1,6 @@
 'use strict'
 
-const { STRING, BIGINT, DATE } = require('sequelize')
+const { STRING, BIGINT, DATE, Op: { eq } } = require('sequelize')
 
 module.exports = (sequelize, options) => {
   const Transactions = sequelize.define('Transactions', {
@@ -23,7 +23,23 @@ module.exports = (sequelize, options) => {
     transactionHash: {
       type: STRING,
       allowNull: true
+    },
+    coinCode: {
+      type: STRING,
+      allowNull: true
     }
   })
+
+  Transactions.getNotExecuted = coinCode => {
+    return Transactions.findAll({
+      where: {
+        executedAt: {
+          [eq]: null
+        },
+        coinCode
+      }
+    })
+  }
+
   return Transactions
 }

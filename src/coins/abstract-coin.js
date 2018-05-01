@@ -51,7 +51,7 @@ class AbstractCoin extends EventEmitter {
             this.emit('blockTemplate', this.blockTemplate)
           }
         })
-        .catch((err) => {
+        .catch(err => {
           logger(`[!] Failed to obtain the last block template: ${err.stack}`)
         })
       this._getLastBlockHeader()
@@ -65,6 +65,9 @@ class AbstractCoin extends EventEmitter {
             }
             this.emit('blockHeader', this.blockHeader)
           }
+        })
+        .catch(err => {
+          logger(`[!] Failed to obtain the last block header: ${err.stack}`)
         })
     }, this.blockTemplateRefreshInterval)
   }

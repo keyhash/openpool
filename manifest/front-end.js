@@ -1,16 +1,12 @@
 module.exports = (options) => (
   {
     server: {
-      autoListen: false
+      port: 1999
     },
     register: {
       plugins: [
         {
           plugin: require('../src/coins'),
-          options
-        },
-        {
-          plugin: require('../src/stratum'),
           options
         },
         {
@@ -22,13 +18,8 @@ module.exports = (options) => (
           options
         },
         {
-          plugin: require('../src/fail2ban'),
+          plugin: require('../src/api'),
           options
-        },
-        {
-          plugin: require('../src/pool'),
-          options
-          // @ todo: handle multiple pools
         }
       ]
     }

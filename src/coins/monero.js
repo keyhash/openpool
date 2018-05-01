@@ -14,25 +14,19 @@ const TRANSACTION_FEE_LIMIT = 4
 const PAYMENT_THRESHOLD = 1
 
 class Monero extends AbstractCoin {
-  constructor ({ address }, daemonRpc, walletRpc) {
+  constructor ({ address }, daemon, wallet) {
     super()
     this.address = address // pool address
-    this.daemon = daemonRpc
-    this.wallet = walletRpc
+    this.daemon = daemon
+    this.wallet = wallet
     this.significantDigits = 1000000000000
     this.code = 'XMR'
+    this.name = 'monero'
     this.transactionFee = TRANSACTION_FEE * this.significantDigits
   }
 
-  transfer (transferRequest) {
-    return this.wallet
-      .request('transfer', transferRequest)
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result
-      })
+  transfer (options) {
+    return this.wallet.transfer(options)
   }
 
   getMaxmimumDestinationsPerTransaction () {
@@ -69,57 +63,34 @@ class Monero extends AbstractCoin {
     return new BigNum('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF', 16)
   }
 
+  async getBlockHeaderByHeight (height) {
+    return this.daemon.getBlockHeader(height)
+      .then(blockHeader => new BlockHeader(blockHeader))
+  }
+
+  async getBlockHeaderByHash (hash) {
+    return this.daemon.getBlockHeader(hash)
+      .then(blockHeader => new BlockHeader(blockHeader))
+  }
+
+  /**
+   * Fetches the most recent block header form the monero daemon
+   *
+   * @returns {Promise.<BlockHeader>} block template
+   */
+  _getLastBlockHeader () {
+    return this.daemon.getLastBlockHeader()
+      .then(blockHeader => new BlockHeader(blockHeader))
+  }
+
   /**
    * Fetches the most recent block template form the monero daemon
    *
    * @returns {Promise.<BlockTemplate>} block template
    */
   _getBlockTemplate () {
-    return this.daemon
-      .request('getblocktemplate', { reserve_size: 17, wallet_address: this.address })
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result
-      })
+    return this.daemon.getBlockTemplate(this.address, 17)
       .then(blockTemplate => new BlockTemplate(blockTemplate))
-  }
-
-  async getBlockHeaderByHeight (height) {
-    return this.daemon
-      .request('getblockheaderbyheight', { height })
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result.block_header
-      })
-      .then(blockHeader => new BlockHeader(blockHeader))
-  }
-
-  async getBlockHeaderByHash (hash) {
-    return this.daemon
-      .request('getblockheaderbyhash', { hash })
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result.block_header
-      })
-      .then(blockHeader => new BlockHeader(blockHeader))
-  }
-
-  _getLastBlockHeader () {
-    return this.daemon
-      .request('getlastblockheader')
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result.block_header
-      })
-      .then(blockHeader => new BlockHeader(blockHeader))
   }
 
   /**
@@ -128,14 +99,14 @@ class Monero extends AbstractCoin {
    * @param {Block} block to be submitted to the daemon
    */
   submit (block) {
-    return this.daemon
-      .request('submitblock', [block.blob.toString('hex')])
-      .then(response => {
-        if (response.error) {
-          throw new Error(response.error.message)
-        }
-        return response.result
-      })
+    return new Promise((resolve, reject) => {
+      this.daemon.client
+        .request('submitblock', { blob: block.blob.toString('hex') }, (err, response) => {
+          if (err) return reject(err)
+          if (response.error) return reject(response.error.message)
+          return resolve(response.result)
+        })
+    })
   }
 }
 
@@ -145,10 +116,9 @@ class BlockTemplate {
 
     this.height = blockTemplate.height
     this.difficulty = blockTemplate.difficulty
-    this.reservedOffset = blockTemplate.reserved_offset
-    this.previousHash = blockTemplate.previous_hash
-    this.blockTemplateHex = blockTemplate.blocktemplate_blob
-    this.blockHashingHex = blockTemplate.blockhashing_blob // unused
+    this.reservedOffset = blockTemplate.offset
+    this.previousHash = blockTemplate.previous
+    this.blockTemplateHex = blockTemplate.blob
     Object.freeze(this)
   }
 

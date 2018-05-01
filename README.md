@@ -3,6 +3,21 @@ OpenPool
 
 Open pool is a mining pool.
 
+Roadmap
+-------
+ - [x] handle anonymous miner connections
+ - [x] support multiple difficulties
+ - [x] validate shares & process payments
+ - [x] architecture ready for multiple coin support
+ - [x] ban of undesirable miners
+ - [x] trusted miners
+ - [ ] improve configuration, remove constants and make them configurable
+ - [ ] better usage of multi-core systems
+ - [ ] api
+ - [ ] web with statistics
+ - [ ] ansible deployment script
+ - [ ] debian packaging
+
 Installation
 ------------
 

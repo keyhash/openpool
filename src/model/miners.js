@@ -2,22 +2,26 @@
 
 const STARTING_HASH_COUNT = 1000 // hashes
 const TARGET_JOB_DURATION = 30 // seconds
+const MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK = 30
+const UNDESIRABLE_LIMIT = 25
 
 const CircularBuffer = require('circular-buffer')
 const EventEmitter = require('events')
+const Crypto = require('crypto')
 const Debug = require('debug')
 const logger = new Debug('miner')
 
 module.exports = ({ Blocks, Jobs, Shares }) => {
   class Miners extends EventEmitter {
-    constructor ({ id, address, agent, coin, connection }) {
+    constructor ({ id, address, paymentId, difficulty, agent, coin, connection }) {
       super()
       this.id = id
       this.address = address
+      this.paymentId = paymentId
       this.agent = agent
       this.coin = coin
       this.connection = connection
-      this.currentHashCount = STARTING_HASH_COUNT
+      this.currentHashCount = Math.max(STARTING_HASH_COUNT, difficulty)
 
       this.currentHeight = 0
       this.heartbeat = Date.now()
@@ -26,10 +30,28 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
       this.connectionTimestamp = Date.now()
       this.totalHashCount = 0
 
+      this.trust = {
+        threshold: 30, // Number of shares before the miner can be trusted
+        probability: 256,
+        penalty: 0
+      }
+
+      this._valid = 0
+      this._invalid = 0
+
       this.connection.once('stop', reason => {
         this.emit('stop', reason)
         this.connection = null
+        this.removeAllListeners('stop')
+        this.removeAllListeners('undesirable')
       })
+    }
+
+    isTrusted () {
+      const random = Crypto.randomBytes(1).readUIntBE(0, 1) // integer between 0 and 255
+      return this.trust.threshold <= 0 &&
+        this.trust.penalty <= 0 &&
+        this.trust.probability < random
     }
 
     login (id) {
@@ -57,18 +79,18 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
      * @returns {Promise.<Block>} returns the block if it was successfully submitted
      */
     submit (id, nonce, result) {
-      const trusted = true
       return this.findJob(id)
         .then(job => job.checkDuplicateSubmission(nonce))
         .then(job => {
           job.submissions.push(nonce)
           return this.coin.getBlockTemplateByHeight(job.height)
             .then(blockTemplate => Promise.all([
-              blockTemplate.getBlock(nonce, job.extraNonce, result /* only when trusted */),
+              blockTemplate.getBlock(nonce, job.extraNonce, result),
               blockTemplate
             ]))
             .then(([block, blockTemplate]) => Promise.all([
-              trusted ? block : block.checkHashMatches(result),
+              // skip the expesive test if the miner is trusted
+              this.isTrusted() ? block : block.checkHashMatches(result),
               blockTemplate
             ]))
             .then(([block, blockTemplate]) => {
@@ -76,7 +98,9 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
               const share = Shares.build({
                 height: job.height,
                 address: this.address,
-                hashCount: job.hashCount
+                coinCode: this.coin.code,
+                hashCount: job.hashCount,
+                trusted: this.isTrusted()
               })
               logger(`[$] Submitted difficulty ${difficulty} required difficulty: ${blockTemplate.difficulty} job hashes: ${job.hashCount}`)
               if (difficulty.ge(blockTemplate.difficulty)) {
@@ -103,6 +127,20 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
               }
               return [share]
             })
+        })
+        // Improve confidence in miner
+        .then(result => {
+          this.trust.probability = Math.max(20, this.trust.probability - 1)
+          this.trust.penalty--
+          this.trust.threshold--
+          return result
+        })
+        // Break of trust, reset values
+        .catch(err => {
+          this.trust.penalty = 30
+          this.trust.probability = 256
+          this.trust.threshold = 30
+          throw err
         })
     }
 
@@ -160,6 +198,48 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
       if (this.totalHashCount > 0) {
         this.currentHashCount = Math.floor(this.totalHashCount / (Math.floor((Date.now() - this.connectionTimestamp) / 1000)) * TARGET_JOB_DURATION)
       }
+    }
+
+    isDesirable () {
+      if (this.valid + this.invalid >= MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK) {
+        return this.invalid / this.valid < UNDESIRABLE_LIMIT / 100
+      }
+      return true
+    }
+
+    get valid () {
+      return this._valid
+    }
+
+    set valid (v) {
+      if (this.valid + this.invalid >= MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK) {
+        this._valid = 0
+        this._invalid = 0
+      }
+      this._valid = v
+    }
+
+    get invalid () {
+      return this._invalid
+    }
+
+    set invalid (i) {
+      this._invalid = i
+      if (this.valid + this.invalid >= MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK) {
+        if (this.invalid / this.valid >= UNDESIRABLE_LIMIT / 100) {
+          this.emit('undesirable')
+        }
+      }
+    }
+
+    remoteAddress () {
+      if (this.connection) {
+        return this.connection.remoteAddress
+      }
+    }
+
+    stop (reason) {
+      this.connection.stop(reason)
     }
   }
 

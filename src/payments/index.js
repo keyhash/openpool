@@ -16,15 +16,16 @@ const sequelize = require('sequelize')
 
 const POOL_ADDRESS = '9wviCeWe2D8XS82k2ovp5EUYLzBt9pYNW2LXUFsZiv8S3Mt21FZ5qQaAroko1enzw3eGr9qC7X1D7Geoo2RrAotYPwq9Gm8'
 
-let paymentsOngoing = false
-
 exports.plugin = {
   pkg: require('./package.json'),
   register: async function (server, options) {
-    const coin = server.plugins.coins.monero
     const { Blocks, Shares, Accounts, Transactions } = server.plugins.model
 
-    const getRewards = async (height) => {
+    const paymentsOngoingByCoin = new Map()
+
+    // PPLNS
+    const getRewards = async (coin, height) => {
+      let lowestRewardShare = Number.MAX_SAFE_INTEGER
       const payments = {}
       const blocks = await Blocks.getValid(height)
       for (let block of blocks) {
@@ -45,15 +46,24 @@ exports.plugin = {
             payments[POOL_ADDRESS] = (payments[POOL_ADDRESS] || 0) + poolReward
           }
           height--
+          lowestRewardShare = Math.min(lowestRewardShare, height)
         }
         block.locked = false
         block.save()
       }
-      return payments
+      return [ payments, lowestRewardShare ]
     }
 
-    const doPayments = async () => {
-      const accounts = await Accounts.getAccountsForPayment(coin.getPaymentThreshold())
+    const clearShares = (coin, height) => {
+      if (height === Number.MAX_SAFE_INTEGER) {
+        logger(`Skipping removal of shares: rewards not yet calculated.`)
+        return
+      }
+      return Shares.clearUnder(coin.code, height)
+    }
+
+    const doPayments = async (coin) => {
+      const accounts = await Accounts.getAccountsForPayment(coin.code, coin.getPaymentThreshold())
       const transactions = []
       for (let account of accounts) {
         await sequelize.transaction()
@@ -62,6 +72,7 @@ exports.plugin = {
               const transaction = Transactions.build({
                 address: account.address,
                 amount: account.balance,
+                coinCode: coin.code,
                 fee: coin.getTransactionFee(account.balance)
               })
               account.balance = 0
@@ -75,8 +86,12 @@ exports.plugin = {
             }
           })
       }
+      return processTransactions(transactions)
+    }
 
+    const processTransactions = async (coin, transactions) => {
       while (transactions.length > 0) {
+        // Split transactions into batches
         const sliceOfTransactions = transactions.splice(0, coin.getMaxmimumDestinationsPerTransaction())
         const destinations = sliceOfTransactions.map(transaction => ({
           amount: Math.floor(transaction.amount - transaction.fee),
@@ -103,31 +118,42 @@ exports.plugin = {
       }
     }
 
-    // Update balance
-    coin.on('blockHeader', async blockHeader => {
-      if (paymentsOngoing) {
-        return
-      }
-      paymentsOngoing = true
-      const height = blockHeader.height - MINING_REWARD_UNLOCK
-      if (height > 0) {
-        const rewards = await getRewards(height)
-        for (let address in rewards) {
-          const amount = rewards[address]
-          await Accounts.findOrCreate({
-            where: { address },
-            defaults: { coinCode: coin.code, balance: 0, accumulated: 0 }
-          }).spread((account, created) => {
-            account.balance += amount
-            account.accumulated += amount
-            account.save()
-          })
+    const doRetryFailedPayments = () => {
+      Object.values(server.plugins.coins).forEach(coin => {
+        const transactions = Transactions.getNotExecuted(coin.code)
+        processTransactions(transactions)
+      })
+    }
+
+    Object.values(server.plugins.coins).forEach(coin => {
+      // Update balance
+      coin.on('blockHeader', async blockHeader => {
+        if (paymentsOngoingByCoin.has(coin.code)) {
+          return
         }
-      }
-      paymentsOngoing = false
+        paymentsOngoingByCoin.set(coin.code, true)
+        const height = blockHeader.height - MINING_REWARD_UNLOCK
+        if (height > 0) {
+          const [ rewards, lowestRewardShare ] = await getRewards(coin, height)
+          for (let address in rewards) {
+            const amount = rewards[address]
+            await Accounts.findOrCreate({
+              where: { address },
+              defaults: { coinCode: coin.code, balance: 0, accumulated: 0 }
+            }).spread((account, created) => {
+              account.balance += amount
+              account.accumulated += amount
+              account.save()
+            })
+          }
+          await clearShares(coin, lowestRewardShare)
+        }
+        paymentsOngoingByCoin.delete(coin.code)
+      })
     })
 
     server.expose('doPayments', doPayments)
+    server.expose('doRetryFailedPayments', doRetryFailedPayments)
     server.expose('getRewards', getRewards)
 
     server.ext('onPreStart', () => {

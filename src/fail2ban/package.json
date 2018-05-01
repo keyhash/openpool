@@ -1,0 +1,8 @@
+{
+  "name": "fail2ban",
+  "version": "1.0.0",
+  "description": "Allows to ban an IP",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT"
+}

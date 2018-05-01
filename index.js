@@ -6,10 +6,15 @@ const options = {
   relativeTo: __dirname
 }
 
-const settings = Ini.parse(Fs.readFileSync('./config.ini', 'utf-8'))
+const settings = require('yargs')
+  .default('config', './config.ini')
+  .config('config', path => Ini.parse(Fs.readFileSync(path, 'utf-8')))
+  .argv
 
 bootstrap(require(`./manifest/pool`)(settings))
 bootstrap(require(`./manifest/payments`)(settings))
+bootstrap(require(`./manifest/front-end`)(settings))
+bootstrap(require(`./manifest/back-end`)(settings))
 
 async function bootstrap (manifest) {
   const worker = await Glue.compose(manifest, options)

@@ -1,0 +1,9 @@
+{
+  "name": "api-admin",
+  "version": "1.0.0",
+  "description": "Adminstration API for openpool",
+  "main": "index.js",
+  "author": "Gerik Boanert <dev@keyhash.eu>",
+  "license": "MIT",
+  "dependencies": [ "model" ]
+}

@@ -13,7 +13,7 @@ test: node_modules
 	npm test
 
 build-monero-test-net:
-	docker build --tag="openpool/monero-test-net" test/tools/monero-test-net
+	docker build --tag="openpool/monero-test-net" docker/monero-test-net
 
 monero-test-net:
 	docker run \
@@ -28,7 +28,7 @@ monero-test-net:
 		openpool/monero-test-net
 
 build-miner:
-	docker build --tag="openpool/xmrig" test/tools/xmrig
+	docker build --tag="openpool/xmrig" docker/xmrig
 
 miner:
 	docker run \
@@ -52,6 +52,5 @@ database:
 	docker run \
 		-p 5432:5432 \
 		postgres
-	psql -hlocalhost -Upostgres -c 'CREATE DATABASE IF NOT EXISTS pool'
 
 dev: database monero-test-net 

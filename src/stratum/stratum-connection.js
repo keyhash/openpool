@@ -80,6 +80,12 @@ class StratumConnection extends EventEmitter {
     this.active = true
   }
 
+  remoteAddress () {
+    if (this.connection) {
+      return this.connection.remoteAddress
+    }
+  }
+
   reply (message) {
     const response = Object.assign({}, responseDefaults, message)
     logger('[>] server: ', response)
