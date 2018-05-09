@@ -8,6 +8,10 @@ module.exports = (sequelize, options) => {
       type: STRING,
       allowNull: false
     },
+    coinCode: {
+      type: STRING,
+      allowNull: false
+    },
     height: {
       type: INTEGER,
       allowNull: false,

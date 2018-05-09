@@ -13,11 +13,10 @@ const logger = new Debug('miner')
 
 module.exports = ({ Blocks, Jobs, Shares }) => {
   class Miners extends EventEmitter {
-    constructor ({ id, address, paymentId, difficulty, agent, coin, connection }) {
+    constructor ({ id, address, difficulty, agent, coin, connection }) {
       super()
       this.id = id
       this.address = address
-      this.paymentId = paymentId
       this.agent = agent
       this.coin = coin
       this.connection = connection
@@ -73,13 +72,14 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
     /**
      * Handles the submission of a job by a miner
      *
-     * @param {Number} id identifier of the miner request
+     * @param {Number} accountId identifier of the account
+     * @param {Number} jobId identifier of the miner request
      * @param {Buffer} nonce nonce discovered by the miner
      * @param {Buffer} result hash found by miner
      * @returns {Promise.<Block>} returns the block if it was successfully submitted
      */
-    submit (id, nonce, result) {
-      return this.findJob(id)
+    submit (accountId, jobId, nonce, result) {
+      return this.findJob(jobId)
         .then(job => job.checkDuplicateSubmission(nonce))
         .then(job => {
           job.submissions.push(nonce)
@@ -96,6 +96,7 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
             .then(([block, blockTemplate]) => {
               const difficulty = this.coin.getHashDifficulty(result /* block.hash */)
               const share = Shares.build({
+                accountId: accountId,
                 height: job.height,
                 address: this.address,
                 coinCode: this.coin.code,
@@ -107,7 +108,6 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
                 this.totalHashCount += job.hashCount
                 return this.coin.submit(block)
                   .then(() => {
-                    console.log(block.toJSON())
                     Blocks.build(block.toJSON()).save()
                     share.match = true
                     share.save()

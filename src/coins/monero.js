@@ -90,7 +90,7 @@ class Monero extends AbstractCoin {
    */
   _getBlockTemplate () {
     return this.daemon.getBlockTemplate(this.address, 17)
-      .then(blockTemplate => new BlockTemplate(blockTemplate))
+      .then(blockTemplate => new BlockTemplate(blockTemplate, this.code))
   }
 
   /**
@@ -111,7 +111,7 @@ class Monero extends AbstractCoin {
 }
 
 class BlockTemplate {
-  constructor (blockTemplate) {
+  constructor (blockTemplate, coinCode) {
     this._blockTemplate = blockTemplate
 
     this.height = blockTemplate.height
@@ -119,6 +119,7 @@ class BlockTemplate {
     this.reservedOffset = blockTemplate.offset
     this.previousHash = blockTemplate.previous
     this.blockTemplateHex = blockTemplate.blob
+    this.coinCode = coinCode
     Object.freeze(this)
   }
 
@@ -150,7 +151,7 @@ class BlockTemplate {
     // Copy the instance identifier to the reserved offset + 4 bytes. Copy in 4 bytes.
     INSTANCE_ID.copy(blockTemplateBlob, this.reservedOffset + 4, 0, 3)
     const blockBlob = CryptoNoteUtil.construct_block_blob(blockTemplateBlob, nonce)
-    return Promise.resolve(new Block(blockBlob, this.height, this.difficulty, hash))
+    return Promise.resolve(new Block(blockBlob, this.coinCode, this.height, this.difficulty, hash))
   }
 }
 
@@ -164,9 +165,10 @@ class BlockHeader {
 }
 
 class Block {
-  constructor (blockBlob, height, difficulty, hash) {
+  constructor (blockBlob, coinCode, height, difficulty, hash) {
     this._blockBlob = blockBlob
     this._hash = hash
+    this.coinCode = coinCode
     this.height = height
     this.difficulty = difficulty
     this.locked = true
@@ -228,6 +230,7 @@ class Block {
     return {
       hash: this.hash.toString('hex'),
       height: this.height,
+      coinCode: this.coinCode,
       difficulty: this.difficulty,
       locked: this.locked
     }

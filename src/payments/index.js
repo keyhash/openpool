@@ -14,7 +14,8 @@ const logger = Debug('payments')
 
 const sequelize = require('sequelize')
 
-const POOL_ADDRESS = '9wviCeWe2D8XS82k2ovp5EUYLzBt9pYNW2LXUFsZiv8S3Mt21FZ5qQaAroko1enzw3eGr9qC7X1D7Geoo2RrAotYPwq9Gm8'
+// const POOL_ADDRESS = '9wviCeWe2D8XS82k2ovp5EUYLzBt9pYNW2LXUFsZiv8S3Mt21FZ5qQaAroko1enzw3eGr9qC7X1D7Geoo2RrAotYPwq9Gm8'
+const POOL_ACCOUNT_ID = 1
 
 exports.plugin = {
   pkg: require('./package.json'),
@@ -33,7 +34,7 @@ exports.plugin = {
         let height = blockHeader.height
         let amountPaid = 0
         while (amountPaid < blockHeader.reward && height > 0) {
-          const shares = await Shares.getByHeight(height)
+          const shares = await Shares.getByHeight(coin.code, height)
           for (let share of shares) {
             let shareReward = Math.floor((share.hashCount * blockHeader.reward) / (blockHeader.difficulty * SHARE_MULTIPLIER))
             if (amountPaid + shareReward > blockHeader.reward) {
@@ -42,8 +43,8 @@ exports.plugin = {
             const poolReward = shareReward * (PPLNS_FEE / 100)
             amountPaid += shareReward // amountToPay = (miner + fee)
             const minerReward = shareReward - poolReward // amountToPay
-            payments[share.address] = (payments[share.address] || 0) + minerReward
-            payments[POOL_ADDRESS] = (payments[POOL_ADDRESS] || 0) + poolReward
+            payments[share.accountId] = (payments[share.accountId] || 0) + minerReward
+            payments[POOL_ACCOUNT_ID] = (payments[POOL_ACCOUNT_ID] || 0) + poolReward
           }
           height--
           lowestRewardShare = Math.min(lowestRewardShare, height)
@@ -70,8 +71,8 @@ exports.plugin = {
           .then(async t => {
             try {
               const transaction = Transactions.build({
-                address: account.address,
                 amount: account.balance,
+                address: account.address,
                 coinCode: coin.code,
                 fee: coin.getTransactionFee(account.balance)
               })
@@ -95,7 +96,7 @@ exports.plugin = {
         const sliceOfTransactions = transactions.splice(0, coin.getMaxmimumDestinationsPerTransaction())
         const destinations = sliceOfTransactions.map(transaction => ({
           amount: Math.floor(transaction.amount - transaction.fee),
-          address: transaction.address
+          address: transaction.address // can be integrated address
         }))
         try {
           const coinTransaction = await coin.transfer({
@@ -135,16 +136,20 @@ exports.plugin = {
         const height = blockHeader.height - MINING_REWARD_UNLOCK
         if (height > 0) {
           const [ rewards, lowestRewardShare ] = await getRewards(coin, height)
-          for (let address in rewards) {
-            const amount = rewards[address]
-            await Accounts.findOrCreate({
-              where: { address },
-              defaults: { coinCode: coin.code, balance: 0, accumulated: 0 }
-            }).spread((account, created) => {
-              account.balance += amount
-              account.accumulated += amount
-              account.save()
+          for (let accountId in rewards) {
+            const amount = rewards[accountId]
+            await Accounts.findOne({
+              where: { id: accountId }
             })
+              .then((account) => {
+                if (!account) {
+                  logger(`[!] Failed to find account for payments: '${accountId}', failed to reward: ${amount}`)
+                  return
+                }
+                account.balance += amount
+                account.accumulated += amount
+                account.save()
+              })
           }
           await clearShares(coin, lowestRewardShare)
         }

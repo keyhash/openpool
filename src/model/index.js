@@ -7,6 +7,9 @@ exports.plugin = {
 
     const Accounts = require('./accounts')(sequelize, options)
     const Shares = require('./shares')(sequelize, options)
+
+    Shares.Account = Shares.belongsTo(Accounts)
+
     const Blocks = require('./blocks')(sequelize, options)
     const Transactions = require('./transactions')(sequelize, options)
 

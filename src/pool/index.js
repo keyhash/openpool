@@ -11,7 +11,7 @@ const STATISTIC_LOG_INTERVAL = 10 * 1000
 const MINER_PRUNE_INTERVAL = 120 * 1000
 const MINER_MAX_INACTIVITY = 180 * 1000
 const MINER_HASH_COUNT_UPDATE = 15 * 1000
-const LOGIN_REGEX = /^([a-z0-9]{95,106})(.([a-z0-9]{8,32}))?(\+(\d+))?$/i // address, paymentId, difficulty
+const LOGIN_REGEX = /^([a-z0-9]{95,106})(\+(\d+))?$/i // address, difficulty
 
 exports.plugin = {
   pkg: require('./package.json'),
@@ -80,8 +80,8 @@ exports.plugin = {
             minerPool.delete(connection.miner.id)
           }
           try {
-            const [ , address, , paymentId, , difficulty ] = login.match(LOGIN_REGEX)
-            const miner = Miners.build({ id: Uuid(), address, paymentId, difficulty, agent, coin, connection })
+            const [ , address, , difficulty ] = login.match(LOGIN_REGEX)
+            const miner = Miners.build({ id: Uuid(), address, difficulty, agent, coin, connection })
             connection.miner = miner
             minerPool.set(miner.id, miner)
             miners++
@@ -111,29 +111,26 @@ exports.plugin = {
          * Handles new a miner submission
          */
         emitter.on('submit', ({ id, params: { job_id, nonce, result } }, miner) => { // eslint-disable-line camelcase
-          miner.submit(job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
-            .then(async ([share]) => {
-              Accounts.findOrCreate({ where: { address: miner.address }, defaults: { coinCode: coin.code } })
-                .spread((account, created) => {
+          Accounts.findOrCreate({ where: { address: miner.address }, defaults: { coinCode: coin.code, balance: 0, accumulated: 0 } })
+            .spread((account, created) => {
+              miner.submit(account.id, job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
+                .then(async ([share]) => {
+                  trusted = share.trusted ? trusted + 1 : trusted
                   account.hashes += share.hashCount
+                  shares++
+                  miner.valid++
                   account.valid++
+                  miner.reply({ id, jsonrpc: '2.0', result: { status: 'OK' } })
+                  miner.sendJob()
                   account.save()
                 })
-              miner.valid++
-              miner.reply({ id, jsonrpc: '2.0', result: { status: 'OK' } })
-              miner.sendJob()
-              shares++
-              trusted = share.trusted ? trusted + 1 : trusted
-            })
-            .catch(async error => {
-              Accounts.findOrCreate({ where: { address: miner.address }, defaults: { coinCode: coin.code } })
-                .spread((account, created) => {
+                .catch(async error => {
+                  miner.invalid++
                   account.invalid++
+                  miner.reply({ id, jsonrpc: '2.0', error: error.message })
+                  miner.sendJob()
                   account.save()
                 })
-              miner.invalid++
-              miner.reply({ id, jsonrpc: '2.0', error: error.message })
-              miner.sendJob()
             })
         })
 
