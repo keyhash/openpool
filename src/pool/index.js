@@ -7,15 +7,13 @@ const Uuid = require('uuid/v4')
 const logger = Debug('pool')
 const statisticsLogger = Debug('statistics')
 
-const STATISTIC_LOG_INTERVAL = 10 * 1000
-const MINER_PRUNE_INTERVAL = 120 * 1000
-const MINER_MAX_INACTIVITY = 180 * 1000
-const MINER_HASH_COUNT_UPDATE = 15 * 1000
 const LOGIN_REGEX = /^([a-z0-9]{95,106})(\+(\d+))?$/i // address, difficulty
 
 exports.plugin = {
   pkg: require('./package.json'),
   register: async function (server, options) {
+    const { STATISTIC_LOG_INTERVAL, MINER_PRUNE_INTERVAL, MINER_MAX_INACTIVITY, MINER_HASH_COUNT_UPDATE } = options.pools
+
     server.dependency([ 'fail2ban', 'model' ], async () => {
       const Fail2ban = server.plugins.fail2ban
       const { Accounts, Miners } = server.plugins.model
@@ -122,15 +120,26 @@ exports.plugin = {
                   account.valid++
                   miner.reply({ id, jsonrpc: '2.0', result: { status: 'OK' } })
                   miner.sendJob()
-                  account.save()
+                  account
+                    .save()
+                    .catch(err => {
+                      logger(`[!] Failed to update account ${account.id} valid shares: ${err.stack}`)
+                    })
                 })
                 .catch(async error => {
                   miner.invalid++
                   account.invalid++
                   miner.reply({ id, jsonrpc: '2.0', error: error.message })
                   miner.sendJob()
-                  account.save()
+                  account
+                    .save()
+                    .catch(err => {
+                      logger(`[!] Failed to update account ${account.id} invalid shares: ${err.stack}`)
+                    })
                 })
+            })
+            .catch(err => {
+              logger(`[!] Failed to find or create an account: ${miner.address}: ${err.stack}`)
             })
         })
 

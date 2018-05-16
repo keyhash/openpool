@@ -9,24 +9,46 @@ const AbstractCoin = require('./abstract-coin')
 
 const INSTANCE_ID = Crypto.randomBytes(4)
 
-const TRANSACTION_FEE = 0.11 // configurable
-const TRANSACTION_FEE_LIMIT = 4
-const PAYMENT_THRESHOLD = 1
-
 class Monero extends AbstractCoin {
-  constructor ({ address }, daemon, wallet) {
-    super()
-    this.address = address // pool address
+  constructor (options, daemon, wallet) {
+    const {
+      ADDRESS,
+      BLOCK_TEMPLATE_REFRESH_INTERVAL,
+      payments: {
+        FEE,
+        MAXIMUM_FEE,
+        MININUM_PAYMENT,
+        MINING_REWARD_UNLOCK,
+        TRANSACTION_PRIORITY,
+        TRANSACTION_UNLOCK_TIME,
+        TRANSACTION_MIXIN
+      }
+    } = options
+
+    super(BLOCK_TEMPLATE_REFRESH_INTERVAL)
+    this.address = ADDRESS // pool address
     this.daemon = daemon
     this.wallet = wallet
     this.significantDigits = 1000000000000
     this.code = 'XMR'
     this.name = 'monero'
-    this.transactionFee = TRANSACTION_FEE * this.significantDigits
+
+    this.transactionFee = FEE * this.significantDigits
+    this.transactionFeeLimit = MAXIMUM_FEE
+    this.minimumPayment = MININUM_PAYMENT
+    this.miningRewardUnlock = MINING_REWARD_UNLOCK
+    this.transactionPriority = TRANSACTION_PRIORITY
+    this.transactionUnlockTime = TRANSACTION_UNLOCK_TIME
+    this.transactionMixin = TRANSACTION_MIXIN
   }
 
   transfer (options) {
-    return this.wallet.transfer(options)
+    const defaults = {
+      unlock_time: this.transactionUnlockTime,
+      priority: this.transactionPriority,
+      mixin: this.transactionMixin
+    }
+    return this.wallet.transfer(Object.assign({}, defaults, options))
   }
 
   getMaxmimumDestinationsPerTransaction () {
@@ -34,15 +56,15 @@ class Monero extends AbstractCoin {
   }
 
   getPaymentThreshold () {
-    return PAYMENT_THRESHOLD
+    return this.minimumPayment
   }
 
   getTransactionFee (amount) {
-    if (amount <= PAYMENT_THRESHOLD) {
+    if (amount <= this.minimumPayment) {
       return this.transactionFee
-    } else if (amount <= TRANSACTION_FEE_LIMIT) {
-      let x = this.transactionFee / (TRANSACTION_FEE_LIMIT - PAYMENT_THRESHOLD)
-      return this.transactionFee - ((amount - PAYMENT_THRESHOLD) * x)
+    } else if (amount <= this.transactionFeeLimit) {
+      let x = this.transactionFee / (this.transactionFeeLimit - this.minimumPayment)
+      return this.transactionFee - ((amount - this.minimumPayment) * x)
     } else {
       return 0
     }

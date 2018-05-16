@@ -1,14 +1,5 @@
 'use strict'
 
-const PPLNS_FEE = 1
-const SHARE_MULTIPLIER = 2
-// const PAYMENT_ROUND_INTERVAL = 60 * 60 * 1000
-const PAYMENT_ROUND_INTERVAL = 5 * 1000
-const MINING_REWARD_UNLOCK = 60
-const TRANSACTION_PRIORITY = 0
-const TRANSACTION_UNLOCK_TIME = 0
-const TRANSACTION_MIXIN = 0
-
 const Debug = require('debug')
 const logger = Debug('payments')
 
@@ -21,6 +12,7 @@ exports.plugin = {
   pkg: require('./package.json'),
   register: async function (server, options) {
     const { Blocks, Shares, Accounts, Transactions } = server.plugins.model
+    const { PAYMENT_ROUND_INTERVAL, PPLNS_FEE, PPLNS_SHARE_MULTIPLIER } = options.payments
 
     const paymentsOngoingByCoin = new Map()
 
@@ -36,7 +28,7 @@ exports.plugin = {
         while (amountPaid < blockHeader.reward && height > 0) {
           const shares = await Shares.getByHeight(coin.code, height)
           for (let share of shares) {
-            let shareReward = Math.floor((share.hashCount * blockHeader.reward) / (blockHeader.difficulty * SHARE_MULTIPLIER))
+            let shareReward = Math.floor((share.hashCount * blockHeader.reward) / (blockHeader.difficulty * PPLNS_SHARE_MULTIPLIER))
             if (amountPaid + shareReward > blockHeader.reward) {
               shareReward = blockHeader.reward - amountPaid
             }
@@ -50,7 +42,11 @@ exports.plugin = {
           lowestRewardShare = Math.min(lowestRewardShare, height)
         }
         block.locked = false
-        block.save()
+        block
+          .save()
+          .catch(err => {
+            logger(`[!] Failed to unlock block ${block.height}: ${err.stack}`)
+          })
       }
       return [ payments, lowestRewardShare ]
     }
@@ -63,31 +59,35 @@ exports.plugin = {
       return Shares.clearUnder(coin.code, height)
     }
 
-    const doPayments = async (coin) => {
-      const accounts = await Accounts.getAccountsForPayment(coin.code, coin.getPaymentThreshold())
-      const transactions = []
-      for (let account of accounts) {
-        await sequelize.transaction()
-          .then(async t => {
-            try {
-              const transaction = Transactions.build({
-                amount: account.balance,
-                address: account.address,
-                coinCode: coin.code,
-                fee: coin.getTransactionFee(account.balance)
-              })
-              account.balance = 0
-              await account.save({ transaction: t })
-              await transaction.save({ transaction: t })
-              await t.commit()
-              transactions.push(transaction)
-            } catch (err) {
-              logger(`Failed to create a transaction for ${account.address} ${err.stack}`)
-              await t.rollback()
-            }
-          })
-      }
-      return processTransactions(transactions)
+    const doPayments = async () => {
+      const batches = Object.values(server.plugins.coins).map(async (coin) => {
+        logger(`[$] Starting payments for ${coin.code}`)
+        const accounts = await Accounts.getAccountsForPayment(coin.code, coin.getPaymentThreshold())
+        const transactions = []
+        for (let account of accounts) {
+          await sequelize.transaction()
+            .then(async t => {
+              try {
+                const transaction = Transactions.build({
+                  amount: account.balance,
+                  address: account.address,
+                  coinCode: coin.code,
+                  fee: coin.getTransactionFee(account.balance)
+                })
+                account.balance = 0
+                await account.save({ transaction: t })
+                await transaction.save({ transaction: t })
+                await t.commit()
+                transactions.push(transaction)
+              } catch (err) {
+                logger(`Failed to create a transaction for ${account.address} ${err.stack}`)
+                await t.rollback()
+              }
+            })
+        }
+        return processTransactions(coin, transactions)
+      })
+      return Promise.all(batches)
     }
 
     const processTransactions = async (coin, transactions) => {
@@ -100,17 +100,18 @@ exports.plugin = {
         }))
         try {
           const coinTransaction = await coin.transfer({
-            unlock_time: TRANSACTION_UNLOCK_TIME,
             get_tx_hex: true,
-            destinations,
-            priority: TRANSACTION_PRIORITY,
-            mixin: TRANSACTION_MIXIN
+            destinations
           })
           logger(`Transaction created: ${coinTransaction.tx_hash}`)
           for (let transaction of sliceOfTransactions) {
             transaction.transactionHash = coinTransaction.tx_hash
             transaction.executedAt = new Date()
-            transaction.save()
+            transaction
+              .save()
+              .catch(err => {
+                logger(`[!] Failed to mark transaction as executed: ${err.stack}`)
+              })
           }
         } catch (err) {
           // @todo
@@ -133,7 +134,7 @@ exports.plugin = {
           return
         }
         paymentsOngoingByCoin.set(coin.code, true)
-        const height = blockHeader.height - MINING_REWARD_UNLOCK
+        const height = blockHeader.height - coin.miningRewardUnlock
         if (height > 0) {
           const [ rewards, lowestRewardShare ] = await getRewards(coin, height)
           for (let accountId in rewards) {
@@ -148,7 +149,11 @@ exports.plugin = {
                 }
                 account.balance += amount
                 account.accumulated += amount
-                account.save()
+                account
+                  .save()
+                  .catch(err => {
+                    logger(`[!] Failed to update account ${accountId} balance +${amount}: ${err.stack}`)
+                  })
               })
           }
           await clearShares(coin, lowestRewardShare)

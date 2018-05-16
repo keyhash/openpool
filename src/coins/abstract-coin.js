@@ -6,10 +6,8 @@ const CircularBuffer = require('circular-buffer')
 const Debug = require('debug')
 const logger = Debug('coin')
 
-const TEMPLATE_INTERVAL = 2000
-
 class AbstractCoin extends EventEmitter {
-  constructor (blockTemplateRefreshInterval = TEMPLATE_INTERVAL) {
+  constructor (blockTemplateRefreshInterval) {
     super()
     this.blockHeader = null
     this.blockTemplate = null

@@ -1,17 +1,19 @@
 'use strict'
 
-const STARTING_HASH_COUNT = 1000 // hashes
-const TARGET_JOB_DURATION = 30 // seconds
-const MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK = 30
-const UNDESIRABLE_LIMIT = 25
-
 const CircularBuffer = require('circular-buffer')
 const EventEmitter = require('events')
 const Crypto = require('crypto')
 const Debug = require('debug')
 const logger = new Debug('miner')
 
-module.exports = ({ Blocks, Jobs, Shares }) => {
+module.exports = ({ Blocks, Jobs, Shares }, options) => {
+  const { pools: {
+    STARTING_HASH_COUNT,
+    TARGET_JOB_DURATION,
+    MINIMUM_SHARES_BEFORE_UNDESIRABLE_CHECK,
+    UNDESIRABLE_LIMIT
+  } } = options
+
   class Miners extends EventEmitter {
     constructor ({ id, address, difficulty, agent, coin, connection }) {
       super()
@@ -108,21 +110,37 @@ module.exports = ({ Blocks, Jobs, Shares }) => {
                 this.totalHashCount += job.hashCount
                 return this.coin.submit(block)
                   .then(() => {
-                    Blocks.build(block.toJSON()).save()
+                    Blocks.build(block.toJSON())
+                      .save()
+                      .catch(err => {
+                        logger(`[!] Failed to save block ${this.address}: ${err.stack}`)
+                      })
                     share.match = true
-                    share.save()
+                    share
+                      .save()
+                      .catch(err => {
+                        logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
+                      })
                     logger(`[$] Block found !`)
                   })
                   .then(() => ([share]))
                   .catch(err => {
                     logger(`[$] Block found but failed to submit ! ${err.stack}`)
-                    share.save()
+                    share
+                      .save()
+                      .catch(err => {
+                        logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
+                      })
                     return [share]
                   })
               } else if (difficulty.lt(job.hashCount)) {
                 return Promise.reject(new Error('Low difficulty share'))
               } else {
-                share.save()
+                share
+                  .save()
+                  .catch(err => {
+                    logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
+                  })
                 this.totalHashCount += job.hashCount
               }
               return [share]

@@ -18,7 +18,8 @@ module.exports = (options) => (
           options
         },
         {
-          plugin: require('../src/payments')
+          plugin: require('../src/payments'),
+          options
         }
       ]
     }

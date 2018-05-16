@@ -27,11 +27,11 @@ exports.plugin = {
       stratumServer.start = () => {
         return new Promise((resolve, reject) => {
           Network.createServer(onConnection)
-            .listen(options.port, options.address, (err) => {
+            .listen(options.port, options.ADDRESS, (err) => {
               if (err) {
                 return reject(err)
               }
-              logger(`Pool started @ ${options.address}:${options.port}`)
+              logger(`Pool started @ ${options.ADDRESS}:${options.PORT}`)
               resolve(stratumServer)
             })
         })
