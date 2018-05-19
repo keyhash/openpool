@@ -22,7 +22,7 @@ module.exports = ({ Blocks, Jobs, Shares }, options) => {
       this.agent = agent
       this.coin = coin
       this.connection = connection
-      this.currentHashCount = Math.max(STARTING_HASH_COUNT, difficulty)
+      this.currentHashCount = difficulty ? Math.max(STARTING_HASH_COUNT, difficulty) : STARTING_HASH_COUNT
 
       this.currentHeight = 0
       this.heartbeat = Date.now()

@@ -226,7 +226,7 @@ class Block {
    */
   get hash () {
     if (this._hash) {
-      return this._hash
+      return Promise.resolve(this._hash)
     }
     const convertedBlob = CryptoNoteUtil.convert_blob(this._blockBlob)
     this.hash = new Promise((resolve, reject) => CryptoNight(convertedBlob, (hash) => resolve(hash)))

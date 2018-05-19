@@ -71,8 +71,10 @@ class StratumConnection extends EventEmitter {
       }
     }
     this.onStop = (err) => {
-      logger(`! connection stop: ${err.stack}`)
-      this.stop(err)
+      logger(`[!] connection stop: ${err.stack} ${Error().stack}`)
+      this.emit('stop', err)
+      this.removeAllListeners('message')
+      this.removeAllListeners('stop')
     }
     this.connection.on('message', this.onMessage)
     this.connection.once('stop', this.onStop)
@@ -94,10 +96,8 @@ class StratumConnection extends EventEmitter {
 
   stop (reason) {
     if (this.active) {
+      this.active = false
       this.connection.stop()
-      this.emit('stop', reason)
-      this.removeAllListeners('message')
-      this.removeAllListeners('stop')
     }
   }
 }

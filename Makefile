@@ -35,7 +35,7 @@ miner:
 		--read-only -m 50M \
 		--cpu-shares 256 \
 		openpool/xmrig \
-		--url=172.17.42.1:31415 \
+		--url=172.17.42.1:10001 \
 		--user=9wq792k9sxVZiLn66S3Qzv8QfmtcwkdXgM5cWGsXAPxoQeMQ79md51PLPCijvzk1iHbuHi91pws5B7iajTX9KTtJ4bh2tCh \
 		--pass=x \
 		--keepalive \

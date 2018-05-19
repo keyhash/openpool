@@ -11,7 +11,7 @@ Roadmap
  - [x] architecture ready for multiple coin support
  - [x] ban of undesirable miners
  - [x] trusted miners
- - [ ] improve configuration, remove constants and make them configurable
+ - [x] improve configuration, remove constants and make them configurable
  - [ ] better usage of multi-core systems
  - [ ] api
  - [ ] web with statistics
