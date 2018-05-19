@@ -27,7 +27,7 @@ exports.plugin = {
       stratumServer.start = () => {
         return new Promise((resolve, reject) => {
           Network.createServer(onConnection)
-            .listen(options.port, options.ADDRESS, (err) => {
+            .listen(options.PORT, options.ADDRESS, (err) => {
               if (err) {
                 return reject(err)
               }
