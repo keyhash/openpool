@@ -11,5 +11,19 @@ exports.plugin = {
         return coin.getLastBlockHeader()
       }
     })
+    server.route({
+      path: '/accounts/{address}/statistics',
+      method: 'GET',
+      handler: ({ params: { coinCode } }, h) => {
+        // Pool hashrate
+
+        // Miners
+
+        // Last block found
+
+        const coin = server.plugins.coins[coinCode]
+        return coin.getLastBlockHeader()
+      }
+    })
   }
 }
