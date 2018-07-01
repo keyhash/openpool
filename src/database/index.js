@@ -12,11 +12,6 @@ exports.plugin = {
       logging: logger
     })
     server.expose('sequelize', sequelize)
-    server.ext('onPreStart', () => {
-      if (!process.env.DATABASE) {
-        process.env.DATABASE = options.database.CONNECTION_URI
-        sequelize.sync()
-      }
-    })
+    server.ext('onPreStart', () => sequelize.sync())
   }
 }

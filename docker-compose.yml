@@ -3,25 +3,19 @@ version: '2.1'
 services:
   database:
     image: "postgres"
-    ports:
-      - "5432:5432"
   monero:
     build: docker/monero-test-net
-    ports:
-      - "28080:28080"
-      - "28081:28081"
-      - "28082:28082"
-      - "28083:28083"
-      - "38080:38080"
-      - "38081:38081"
-      - "38082:38082"
-      - "38083:38083"
   openpool:
     image: openpool
+    depends_on:
+      - database
+      - monero
     build: .
     environment:
       NODE_ENV: development
+    volumes:
+      - ./:/usr/src/app
     ports:
       - 31415:31415
       - 9229:9229
-    command: node --inspect=0.0.0.0:9229 index.js
+    command: ./wait-for-it.sh database:5432 -- node --inspect=0.0.0.0:9229 index.js --config docker-compose.ini

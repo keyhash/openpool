@@ -166,9 +166,9 @@ exports.plugin = {
     server.expose('doRetryFailedPayments', doRetryFailedPayments)
     server.expose('getRewards', getRewards)
 
-    server.ext('onPreStart', () => {
+    server.ext('onPostStart', () => {
       setInterval(doPayments, PAYMENT_ROUND_INTERVAL)
-      doPayments()
+      return doPayments()
     })
   }
 }
