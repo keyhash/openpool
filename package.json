@@ -30,25 +30,27 @@
   },
   "homepage": "https://github.com/keyhash/openpool#readme",
   "devDependencies": {
-    "jest": "^22.4.2",
+    "jest": "^22.4.4",
     "standard": "^11.0.0"
   },
   "dependencies": {
+    "ajv": "^6.5.2",
+    "ajv-keywords": "^3.2.0",
     "bignum": "^0.13.0",
     "circular-buffer": "^1.0.2",
     "cryptonote-util": "github:keyhash/node-cryptonote-util",
     "debug": "^3.1.0",
     "glue": "^5.0.0",
-    "hapi": "^17.3.0",
+    "hapi": "^17.5.2",
     "ini": "^1.3.5",
-    "joi": "^13.1.2",
-    "monero-rpc": "keyhash/node-monero-rpc#feature/promise",
-    "node-cryptonight": "keyhash/node-cryptonight#feature/variants",
-    "pg": "^7.4.1",
+    "joi": "^13.4.0",
+    "monero-rpc": "github:keyhash/node-monero-rpc#feature/promise",
+    "node-cryptonight": "^1.1.0",
+    "pg": "^7.4.3",
     "pg-hstore": "^2.3.2",
-    "request": "^2.85.0",
+    "request": "^2.87.0",
     "request-promise-native": "^1.0.5",
-    "sequelize": "^4.37.5",
-    "yargs": "^11.0.0"
+    "sequelize": "^4.38.0",
+    "yargs": "^11.1.0"
   }
 }

@@ -8,7 +8,7 @@ ADD https://github.com/just-containers/s6-overlay/releases/download/v1.21.4.0/s6
     /tmp/
 
 RUN tar xzf /tmp/s6-overlay-amd64.tar.gz -C / && \
-    apt-get update && apt-get install -y --no-install-recommends bzip2 && \
+    apt-get update && apt-get install -y --no-install-recommends bzip2 libpcsclite1 && \
     cd /tmp && tar xvf linux64 && cp -R monero*/* /usr/bin && \
     apt-get remove -y bzip2 && rm -rf /usr/share/man/* /usr/share/groff/* /usr/share/info/* /var/cache/man/* /tmp/* /var/lib/apt/lists/*
 

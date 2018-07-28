@@ -4,7 +4,7 @@ services:
   database:
     image: "postgres"
   monero:
-    build: docker/monero-test-net
+    build: docker/monero
   openpool:
     image: openpool
     depends_on:
@@ -18,4 +18,4 @@ services:
     ports:
       - 31415:31415
       - 9229:9229
-    command: ./wait-for-it.sh database:5432 -- node --inspect=0.0.0.0:9229 index.js --config docker-compose.ini
+    command: ./tools/wait-for-it.sh database:5432 -- node --inspect=0.0.0.0:9229 index.js --config docker/openpool/docker-compose.ini
