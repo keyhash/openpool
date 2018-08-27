@@ -29,6 +29,18 @@ Installation
  * 100GB of disk space
 
 
+Development
+-----------
+
+### Requirements
+ * docker and docker-compose
+ * node and npm
+
+```
+npm install
+docker-compose up
+```
+
 Pool architecture
 -----------------
 

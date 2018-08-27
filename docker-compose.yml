@@ -2,20 +2,25 @@ version: '2.1'
 
 services:
   database:
-    image: "postgres"
+    image: postgres
   monero:
     build: docker/monero
+  redis:
+    image: redis
   openpool:
     image: openpool
     depends_on:
       - database
       - monero
-    build: .
+    build:
+      context: .
+      dockerfile: docker/openpool/Dockerfile
     environment:
       NODE_ENV: development
     volumes:
       - ./:/usr/src/app
     ports:
-      - 31415:31415
-      - 9229:9229
-    command: ./tools/wait-for-it.sh database:5432 -- node --inspect=0.0.0.0:9229 index.js --config docker/openpool/docker-compose.ini
+      - 9229:9229 # debugger
+      - 1999:1999 # front-end
+      - 31415:31415 # miners
+    command: ./tools/wait-for-it.sh database:5432 -- nodemon --watch index.js --watch src --inspect=0.0.0.0:9229 ./index.js -c docker/openpool/docker-compose.ini

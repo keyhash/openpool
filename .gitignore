@@ -11,6 +11,8 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.DS_Store
+src/ui/dist
 
 # Dependency directories
 node_modules/
@@ -26,5 +28,3 @@ typings/
 
 # Development config
 config.ini
-
-

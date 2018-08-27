@@ -15,12 +15,13 @@ exports.plugin = {
     const { STATISTIC_LOG_INTERVAL, MINER_PRUNE_INTERVAL, MINER_MAX_INACTIVITY, MINER_HASH_COUNT_UPDATE } = options.pools
 
     const Fail2ban = server.plugins.fail2ban
+    const Push = server.plugins.push
     const { Accounts, Miners } = server.plugins.model
 
     for (let [coinName, pools] of Object.entries(options.pool)) {
       const coin = server.plugins.coins[coinName]
       if (!coin) {
-        logger(`[!] You configured a pool for a coin that is not configured '${coinName}.'`)
+        logger(`[!] You configured a pool for a coin that is not configured '${coinName}'.`)
         continue
       }
       for (let [poolName, configuration] of Object.entries(pools)) {
@@ -36,6 +37,7 @@ exports.plugin = {
       let miners = 0 // all time number of miner connected to the pool
       let shares = 0 // all time number of shares processed
       let trusted = 0 // all time number of trusted shares processed
+      let hashes = 0 // number of hashes processed since last average computation
 
       server.ext('onPostStart', () => {
         logger(`[#] Starting now '${coin.name} ${poolName}' ${configuration.ADDRESS}:${configuration.PORT}`)
@@ -111,11 +113,12 @@ exports.plugin = {
        */
       emitter.on('submit', ({ id, params: { job_id, nonce, result } }, miner) => { // eslint-disable-line camelcase
         Accounts.findOrCreate({ where: { address: miner.address }, defaults: { coinCode: coin.code, balance: 0, accumulated: 0 } })
-          .spread((account, created) => {
+          .spread((account, _) => {
             miner.submit(account.id, job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
               .then(async ([share]) => {
                 trusted = share.trusted ? trusted + 1 : trusted
                 account.hashes += share.hashCount
+                hashes += share.hashCount
                 shares++
                 miner.valid++
                 account.valid++
@@ -146,23 +149,38 @@ exports.plugin = {
 
       stratumServer.on('connection', onConnection)
 
-      setInterval(() => {
-        statisticsLogger(`[#] '${coin.name} ${poolName}' Miners: ${minerPool.size} Total Miners: ${miners} Shares: ${shares} Trusted: ${trusted}`)
+      // Statistics
+      setInterval(async () => {
+        coin.getBlockTemplate(blockTemplate => {
+          statisticsLogger(`[#] '${coin.name} ${poolName}' Miners: ${minerPool.size} Total Miners: ${miners} Shares: ${shares} Trusted: ${trusted}`)
+          Push.publish({
+            topic: `pool/${coin.coinCode}/statistics`,
+            payload: {
+              shares,
+              miners,
+              poolHashRate: hashes / STATISTIC_LOG_INTERVAL,
+              networkHashRate: blockTemplate.difficulty
+            }
+          })
+          hashes = 0
+        })
       }, STATISTIC_LOG_INTERVAL)
 
+      // Prune inactive miners
       setInterval(() => {
-        let numberOfInactiveMiners = 0
-        minerPool.forEach((miner) => {
+        let inactive = 0
+        minerPool.forEach(miner => {
           if (Date.now() - miner.heartbeat > MINER_MAX_INACTIVITY) {
             miner.stop() // Stop connection, which in turn will remove it from the minerPool
-            numberOfInactiveMiners++
+            inactive++
           }
         })
-        if (numberOfInactiveMiners) {
-          logger(`[!] Pruned ${numberOfInactiveMiners} inactive miners.`)
+        if (inactive) {
+          logger(`[!] Pruned ${inactive} inactive miners.`)
         }
       }, MINER_PRUNE_INTERVAL)
 
+      // Update difficulty
       setInterval(() => {
         minerPool.forEach(miner => miner.updateDifficulty())
       }, MINER_HASH_COUNT_UPDATE)

@@ -1,0 +1,7 @@
+{
+  "name": "ui",
+  "version": "1.0.0",
+  "description": "An open source Monero pool",
+  "author": "Gerik Bonaert <dev@adaxisoft.be>",
+  "private": true
+}

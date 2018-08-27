@@ -8,6 +8,7 @@ const options = {
 
 const settings = require('yargs')
   .default('config', './config.ini')
+  .alias('config', 'c')
   .config('config', path => Ini.parse(Fs.readFileSync(path, 'utf-8')))
   .argv
 
