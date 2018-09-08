@@ -78,88 +78,64 @@ module.exports = ({ Blocks, Jobs, Shares }, options) => {
      * @param {Number} jobId identifier of the miner request
      * @param {Buffer} nonce nonce discovered by the miner
      * @param {Buffer} result hash found by miner
-     * @returns {Promise.<Block>} returns the block if it was successfully submitted
+     * @returns {Promise.<Share>} returns the share if it was successfully submitted
      */
-    submit (accountId, jobId, nonce, result) {
-      return this.findJob(jobId)
-        .then(job => job.checkDuplicateSubmission(nonce))
-        .then(job => {
-          job.submissions.push(nonce)
-          return this.coin.getBlockTemplateByHeight(job.height)
-            .then(blockTemplate => Promise.all([
-              blockTemplate.getBlock(nonce, job.extraNonce, result),
-              blockTemplate
-            ]))
-            .then(([block, blockTemplate]) => Promise.all([
-              // skip the expesive test if the miner is trusted
-              this.isTrusted() ? block : block.checkHashMatches(result),
-              blockTemplate
-            ]))
-            .then(([block, blockTemplate]) => {
-              const difficulty = this.coin.getHashDifficulty(result /* block.hash */)
-              const share = Shares.build({
-                accountId: accountId,
-                height: job.height,
-                address: this.address,
-                coinCode: this.coin.code,
-                hashCount: job.hashCount,
-                trusted: this.isTrusted()
-              })
-              logger(`[$] Submitted difficulty ${difficulty} required difficulty: ${blockTemplate.difficulty} job hashes: ${job.hashCount}`)
-              if (difficulty.ge(blockTemplate.difficulty)) {
-                this.totalHashCount += job.hashCount
-                return this.coin.submit(block)
-                  .then(() => {
-                    Blocks.build(block.toJSON())
-                      .save()
-                      .catch(err => {
-                        logger(`[!] Failed to save block ${this.address}: ${err.stack}`)
-                      })
-                    share.match = true
-                    share
-                      .save()
-                      .catch(err => {
-                        logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
-                      })
-                    logger(`[$] Block found !`)
-                  })
-                  .then(() => ([share]))
-                  .catch(err => {
-                    logger(`[$] Block found but failed to submit ! ${err.stack}`)
-                    share
-                      .save()
-                      .catch(err => {
-                        logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
-                      })
-                    return [share]
-                  })
-              } else if (difficulty.lt(job.hashCount)) {
-                return Promise.reject(new Error('Low difficulty share'))
-              } else {
-                share
-                  .save()
-                  .catch(err => {
-                    logger(`[!] Failed to save share ${this.address}: ${err.stack}`)
-                  })
-                this.totalHashCount += job.hashCount
-              }
-              return [share]
-            })
+    async submit (jobId, nonce, result) {
+      try {
+        const job = await this.findJob(jobId)
+        await job.checkDuplicateSubmission(nonce)
+        job.submissions.push(nonce)
+
+        const blockTemplate = await this.coin.getBlockTemplateByHeight(job.height)
+        const block = await blockTemplate.getBlock(nonce, job.extraNonce, result)
+
+        if (!this.isTrusted()) {
+          await block.checkHashMatches()
+        }
+
+        const share = Shares.build({
+          height: job.height,
+          address: this.address,
+          coinCode: this.coin.code,
+          hashCount: job.hashCount,
+          trusted: this.isTrusted()
         })
-        // Improve confidence in miner
-        .then(result => {
-          this.trust.probability = Math.max(20, this.trust.probability - 1)
-          this.trust.penalty--
-          this.trust.threshold--
-          return result
-        })
-        // Break of trust, reset values
-        .catch(err => {
-          this.trust.penalty = 30
-          this.trust.probability = 256
-          this.trust.threshold = 30
-          throw err
-        })
+
+        const difficulty = this.coin.getHashDifficulty(block.hash)
+
+        logger(`[$] Submitted difficulty '${difficulty}' required difficulty: '${blockTemplate.difficulty}' job hashes: '${job.hashCount}'`)
+
+        if (difficulty.ge(blockTemplate.difficulty)) {
+          this.totalHashCount += job.hashCount
+          try {
+            await this.coin.submit(block)
+            try {
+              await Blocks.create(block.toJSON())
+            } catch (err) {
+              logger(`[!] Failed to save block ${this.address}: ${err.stack}`)
+            }
+            share.match = true
+            logger(`[$] Block found !`)
+          } catch (err) {
+            logger(`[$] Block found but failed to submit ! ${err.stack}`)
+          }
+        } else if (difficulty.lt(job.hashCount)) {
+          throw new Error('Low difficulty share')
+        } else {
+          this.totalHashCount += job.hashCount
+        }
+
+        this.trust.penalty--
+        this.trust.probability = Math.max(20, this.trust.probability - 1)
+        this.trust.threshold--
+
+        return share
+      } catch (err) {
+        this.trust.penalty = 30
+        this.trust.probability = 256
+        this.trust.threshold = 30
+        throw err
+      }
     }
 
     sendJob () {

@@ -2,8 +2,13 @@
   <div>
     <br>
     <div v-if="account">
-      Address: {{ $route.params.address }}<br>
-      Balance: {{ account.balance }}
+      Address: {{ $route.params.address }} <br>
+      Balance: {{ account.balance }} {{ account.coinCode }} <br>
+      Account created at {{ account.createdAt }} <br>
+      Last update at {{ account.updatedAt }} <br>
+      Submitted hashes: {{ account.hashes }} <br>
+      Valid shares: {{ account.valid }} <br>
+      Invalid shares: {{ account.invalid }} <br>
     </div>
     <div v-else>
       Account not found
@@ -20,7 +25,9 @@ export default {
     }
   },
   mounted () {
-    fetch('http://localhost:1999/accounts/1')
+    const address = this.$route.params.address
+    const url = `http://localhost:1999/accounts/${encodeURIComponent(address)}`
+    fetch(url)
       .then(response => response.json())
       .then(data => (this.account = data))
       .catch(err => console.error(err))

@@ -1,0 +1,8 @@
+{
+  "name": "push-server",
+  "version": "1.0.0",
+  "description": "Openpool push notifications",
+  "main": "index.js",
+  "author": "Gerik Bonaert <dev@keyhash.eu>",
+  "license": "MIT"
+}

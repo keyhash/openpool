@@ -26,6 +26,10 @@ module.exports = (options) => (
           options
         },
         {
+          plugin: require('../src/push-notifications'),
+          options
+        },
+        {
           plugin: require('../src/pool'),
           options
           // @ todo: handle multiple pools

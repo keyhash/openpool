@@ -6,6 +6,7 @@ const Uuid = require('uuid/v4')
 
 const logger = Debug('pool')
 const statisticsLogger = Debug('statistics')
+const sequelize = require('sequelize')
 
 const LOGIN_REGEX = /^([a-z0-9]{95,106})(\+(\d+))?$/i // address, difficulty
 
@@ -106,59 +107,78 @@ exports.plugin = {
       /**
        * Searches for a new job to assign to the miner
        */
-      emitter.on('getjob', (message, miner) => miner.sendJob())
+      emitter.on('getjob', (_, miner) => miner.sendJob())
 
       /**
        * Handles new a miner submission
        */
-      emitter.on('submit', ({ id, params: { job_id, nonce, result } }, miner) => { // eslint-disable-line camelcase
-        Accounts.findOrCreate({ where: { address: miner.address }, defaults: { coinCode: coin.code, balance: 0, accumulated: 0 } })
-          .spread((account, _) => {
-            miner.submit(account.id, job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
-              .then(async ([share]) => {
+      emitter.on('submit', async ({ id, params: { job_id, nonce, result } }, miner) => { // eslint-disable-line camelcase
+        let share = false
+
+        let tOk = false
+        while (!tOk) {
+          // Transaction can fail due to concurrent update.
+          // See: https://www.postgresql.org/docs/9.1/static/transaction-iso.html#XACT-REPEATABLE-READ
+          const t = await sequelize.transaction({ autocommit: false })
+          try {
+            const [ account ] = await Accounts.findOrCreate({
+              where: { address: miner.address },
+              defaults: { coinCode: coin.code, balance: 0, accumulated: 0 },
+              transaction: t,
+              lock: t.LOCK.UPDATE
+            })
+
+            if (share === false) {
+              // if the transaction fails this part must not be executed again
+              // at the end of this block we ensure that `share` will not be false.
+              try {
+                share = await miner.submit(job_id, Buffer.from(nonce, 'hex'), Buffer.from(result, 'hex'))
                 trusted = share.trusted ? trusted + 1 : trusted
-                account.hashes += share.hashCount
                 hashes += share.hashCount
                 shares++
                 miner.valid++
-                account.valid++
                 miner.reply({ id, jsonrpc: '2.0', result: { status: 'OK' } })
-                miner.sendJob()
-                account
-                  .save()
-                  .catch(err => {
-                    logger(`[!] Failed to update account ${account.id} valid shares: ${err.stack}`)
-                  })
-              })
-              .catch(async error => {
+              } catch (err) {
                 miner.invalid++
-                account.invalid++
-                miner.reply({ id, jsonrpc: '2.0', error: error.message })
-                miner.sendJob()
-                account
-                  .save()
-                  .catch(err => {
-                    logger(`[!] Failed to update account ${account.id} invalid shares: ${err.stack}`)
-                  })
-              })
-          })
-          .catch(err => {
-            logger(`[!] Failed to find or create an account: ${miner.address}: ${err.stack}`)
-          })
+                miner.reply({ id, jsonrpc: '2.0', error: err.message })
+                share = undefined
+              }
+            }
+
+            if (share) {
+              // this must be executed on each transaction attempt
+              share.accountId = account.id
+              share.save({ transaction: t })
+              account.valid++
+              account.hashes += share.hashCount
+            } else {
+              account.invalid++
+            }
+
+            await account.save({ transaction: t })
+
+            t.commit()
+            tOk = true
+          } catch (err) {
+            t.rollback()
+            logger(`[!] Failed to find or create an account and save share: ${miner.address}: ${err.stack}`)
+          }
+        }
+        miner.sendJob()
       })
 
       stratumServer.on('connection', onConnection)
 
       // Statistics
       setInterval(async () => {
-        coin.getBlockTemplate(blockTemplate => {
+        coin.getBlockTemplate().then(blockTemplate => {
           statisticsLogger(`[#] '${coin.name} ${poolName}' Miners: ${minerPool.size} Total Miners: ${miners} Shares: ${shares} Trusted: ${trusted}`)
           Push.publish({
-            topic: `pool/${coin.coinCode}/statistics`,
+            topic: `pool/${coin.code}/statistics`,
             payload: {
               shares,
               miners,
-              poolHashRate: hashes / STATISTIC_LOG_INTERVAL,
+              poolHashRate: hashes / (STATISTIC_LOG_INTERVAL / 1000),
               networkHashRate: blockTemplate.difficulty
             }
           })

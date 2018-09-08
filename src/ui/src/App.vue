@@ -5,30 +5,26 @@
         <md-button class="md-icon-button" @click="menuVisible = !menuVisible">
           <md-icon>menu</md-icon>
         </md-button>
-        <span class="md-title">Openpool</span>
+        <span style="flex: 1" class="md-title">Openpool</span>
+        <hash-rates style="flex: 11"/>
       </md-app-toolbar>
 
       <md-app-drawer :md-active.sync="menuVisible">
-        <md-toolbar class="md-transparent" md-elevation="0">Navigation</md-toolbar>
+        <md-toolbar class="md-transparent" md-elevation="0">Openpool</md-toolbar>
         <md-list>
           <md-list-item>
-            <md-icon>move_to_inbox</md-icon>
-            <span class="md-list-item-text">Inbox</span>
+            <md-icon>account_balance</md-icon>
+            <span class="md-list-item-text">Account &amp; Payments</span>
           </md-list-item>
 
           <md-list-item>
-            <md-icon>send</md-icon>
-            <span class="md-list-item-text">Sent Mail</span>
+            <md-icon>group</md-icon>
+            <span class="md-list-item-text">Pool</span>
           </md-list-item>
 
           <md-list-item>
-            <md-icon>delete</md-icon>
-            <span class="md-list-item-text">Trash</span>
-          </md-list-item>
-
-          <md-list-item>
-            <md-icon>error</md-icon>
-            <span class="md-list-item-text">Spam</span>
+            <md-icon>help</md-icon>
+            <span class="md-list-item-text">Tutorial</span>
           </md-list-item>
         </md-list>
       </md-app-drawer>
@@ -42,13 +38,19 @@
 
 <script>
 import Vue from 'vue'
+import VueMqtt from 'vue-mqtt'
 import VueMaterial from 'vue-material'
 import 'vue-material/dist/vue-material.min.css'
+import HashRates from './components/HashRates.vue'
 
 Vue.use(VueMaterial)
+Vue.use(VueMqtt, 'ws://localhost:3000/')
 
 export default {
   name: 'App',
+  components: {
+    HashRates
+  },
   data: () => ({
     menuVisible: false
   })

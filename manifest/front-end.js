@@ -34,10 +34,10 @@ module.exports = (options) => (
           plugin: require('../src/api'),
           options
         },
-        // {
-        //   plugin: require('../src/push-notifications'),
-        //   options
-        // },
+        {
+          plugin: require('../src/push-server'),
+          options
+        },
         {
           plugin: require('../src/ui'),
           options

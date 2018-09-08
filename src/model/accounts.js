@@ -1,6 +1,6 @@
 'use strict'
 
-const { STRING, DOUBLE, INTEGER, Op: { col, gte, and } } = require('sequelize')
+const { STRING, DOUBLE, INTEGER } = require('sequelize')
 
 module.exports = (sequelize, options) => {
   const Accounts = sequelize.define('Accounts', {
@@ -48,15 +48,6 @@ module.exports = (sequelize, options) => {
   }, {
     paranoid: false
   })
-
-  Accounts.getAccountsForPayment = (coinCode, paymentThreshold) => {
-    return Accounts.findAll(
-      { where: { [and]: [
-        { coinCode },
-        { balance: { [gte]: paymentThreshold } },
-        { balance: { [gte]: { [col]: 'paymentThreshold' } } }
-      ] } })
-  }
 
   return Accounts
 }

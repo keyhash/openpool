@@ -4,6 +4,7 @@ const Debug = require('debug')
 const logger = Debug('payments')
 
 const sequelize = require('sequelize')
+const { Op: { col, gte, and } } = require('sequelize')
 
 // const POOL_ADDRESS = '9wviCeWe2D8XS82k2ovp5EUYLzBt9pYNW2LXUFsZiv8S3Mt21FZ5qQaAroko1enzw3eGr9qC7X1D7Geoo2RrAotYPwq9Gm8'
 const POOL_ACCOUNT_ID = 1
@@ -42,11 +43,11 @@ exports.plugin = {
           lowestRewardShare = Math.min(lowestRewardShare, height)
         }
         block.locked = false
-        block
-          .save()
-          .catch(err => {
-            logger(`[!] Failed to unlock block ${block.height}: ${err.stack}`)
-          })
+        try {
+          await block.save()
+        } catch (err) {
+          logger(`[!] Failed to unlock block ${block.height}: ${err.stack}`)
+        }
       }
       return [ payments, lowestRewardShare ]
     }
@@ -62,28 +63,44 @@ exports.plugin = {
     const doPayments = async () => {
       const batches = Object.values(server.plugins.coins).map(async (coin) => {
         logger(`[$] Starting payments for ${coin.code}`)
-        const accounts = await Accounts.getAccountsForPayment(coin.code, coin.getPaymentThreshold())
+
         const transactions = []
-        for (let account of accounts) {
-          await sequelize.transaction()
-            .then(async t => {
-              try {
-                const transaction = Transactions.build({
-                  amount: account.balance,
-                  address: account.address,
-                  coinCode: coin.code,
-                  fee: coin.getTransactionFee(account.balance)
-                })
-                account.balance = 0
-                await account.save({ transaction: t })
-                await transaction.save({ transaction: t })
-                await t.commit()
-                transactions.push(transaction)
-              } catch (err) {
-                logger(`Failed to create a transaction for ${account.address} ${err.stack}`)
-                await t.rollback()
-              }
+
+        let tOk = false
+        while (!tOk) {
+          // Transaction can fail due to concurrent update.
+          // See: https://www.postgresql.org/docs/9.1/static/transaction-iso.html#XACT-REPEATABLE-READ
+          const t = await sequelize.transaction()
+          try {
+            const accounts = await Accounts.findAll({
+              where: {
+                [and]: [
+                  { coinCode: coin.code },
+                  { balance: { [gte]: coin.getPaymentThreshold() } },
+                  { balance: { [gte]: { [col]: 'paymentThreshold' } } }
+                ]},
+              lock: t.LOCK.UPDATE,
+              transaction: t
             })
+
+            for (let account of accounts) {
+              const transaction = Transactions.build({
+                amount: account.balance,
+                address: account.address,
+                coinCode: coin.code,
+                fee: coin.getTransactionFee(account.balance)
+              })
+              account.balance = 0
+              await account.save({ transaction: t })
+              await transaction.save({ transaction: t })
+              transactions.push(transaction)
+            }
+            await t.commit()
+            tOk = true
+          } catch (err) {
+            await t.rollback()
+            logger(`[!] Failed to create transactions: ${err.stack}`)
+          }
         }
         return processTransactions(coin, transactions)
       })
@@ -139,22 +156,34 @@ exports.plugin = {
           const [ rewards, lowestRewardShare ] = await getRewards(coin, height)
           for (let accountId in rewards) {
             const amount = rewards[accountId]
-            await Accounts.findOne({
-              where: { id: accountId }
-            })
-              .then((account) => {
+
+            let tOk = false
+            while (!tOk) {
+              // Transaction can fail due to concurrent update.
+              // See: https://www.postgresql.org/docs/9.1/static/transaction-iso.html#XACT-REPEATABLE-READ
+              const t = await sequelize.transaction({ autocommit: false })
+              try {
+                const account = await Accounts.findOne({
+                  where: { id: accountId },
+                  lock: t.LOCK.UPDATE,
+                  transaction: t
+                })
                 if (!account) {
                   logger(`[!] Failed to find account for payments: '${accountId}', failed to reward: ${amount}`)
-                  return
+                  await t.rollback()
+                  tOk = true // success from a transaction standpoint
+                  continue
                 }
                 account.balance += amount
                 account.accumulated += amount
-                account
-                  .save()
-                  .catch(err => {
-                    logger(`[!] Failed to update account ${accountId} balance +${amount}: ${err.stack}`)
-                  })
-              })
+                await account.save({ transaction: t })
+                await t.commit()
+                tOk = true
+              } catch (err) {
+                await t.rollback()
+                logger(`[!] Failed to update account ${accountId} balance +${amount}: ${err.stack}`)
+              }
+            }
           }
           await clearShares(coin, lowestRewardShare)
         }

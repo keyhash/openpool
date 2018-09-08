@@ -15,7 +15,8 @@ const RPC_MESSAGE_SCHEMA = Joi.object({
       then: Joi.object({
         login: Joi.string().required(),
         pass: Joi.string().required(),
-        agent: Joi.string()
+        agent: Joi.string(),
+        algo: Joi.array()
       }).required()
     })
     .when('method', {

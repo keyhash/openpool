@@ -1,49 +1,41 @@
 'use strict'
 
-const Mosca = require('mosca').Server
+const Ascoltatori = require('ascoltatori')
 const Redis = require('redis')
 const Hoek = require('hoek')
+const Debug = require('debug')
 
-const pushBackendConfiguration = (options) => {
-  const { HOST, PORT } = Hoek.applyToDefaults(
-    { HOST: '127.0.0.1', PORT: 6379 },
-    options.push.backend
-  )
-  return {
-    type: 'redis',
-    redis: Redis,
-    db: 12,
-    port: PORT,
-    host: HOST
-  }
-}
+const logger = new Debug('push')
 
 exports.plugin = {
   pkg: require('./package.json'),
   register: async function (server, options) {
-    const { HOST, PORT } = Hoek.applyToDefaults(
-      { HOST: '127.0.0.1', PORT: 3000 },
-      options.push
+    const { ADDRESS, PORT } = Hoek.applyToDefaults(
+      { HOST: '127.0.0.1', PORT: 6379 },
+      options.push.backend
     )
+
     const settings = {
-      host: HOST,
-      http: {
-        port: PORT,
-        bundle: true,
-        static: './'
-      },
-      backend: pushBackendConfiguration(options),
-      logger: { level: 'debug' }
+      type: 'redis',
+      redis: Redis,
+      db: 12,
+      port: PORT,
+      host: ADDRESS
     }
-    const mosca = new Mosca(settings)
+
+    const ascoltatore = new Promise((resolve, reject) =>
+      Ascoltatori.build(settings, (err, ascoltatore) => err ? reject(err) : resolve(ascoltatore)))
 
     server.expose('publish', ({ topic, payload }) => {
-      mosca.publish({
+      logger('[*]', topic, JSON.stringify(payload))
+      ascoltatore.then(server => server.publish(
         topic,
-        payload: JSON.stringify(payload),
-        qos: 0, // 0, 1, or 2
-        retain: true // or false
-      })
+        payload,
+        {
+          qos: 0, // 0, 1, or 2
+          retain: true // or false
+        }
+      ))
     })
   }
 }

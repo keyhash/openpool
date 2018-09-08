@@ -39,9 +39,8 @@ exports.plugin = {
       path: '/accounts/{address}',
       method: 'GET',
       handler: ({ params: { address } }, h) => {
-        return { balance: 8 }
-        // return Accounts.find({ address })
-        //   .then(account => account || Boom.notFound('Account not found'))
+        return Accounts.find({ address })
+          .then(account => account || Boom.notFound('Account not found'))
       }
     })
   }

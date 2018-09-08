@@ -12,10 +12,14 @@ const settings = require('yargs')
   .config('config', path => Ini.parse(Fs.readFileSync(path, 'utf-8')))
   .argv
 
-bootstrap(require(`./manifest/pool`)(settings))
-bootstrap(require(`./manifest/payments`)(settings))
-bootstrap(require(`./manifest/front-end`)(settings))
-bootstrap(require(`./manifest/back-end`)(settings))
+;[
+  `./manifest/pool`,
+  `./manifest/payments`,
+  `./manifest/front-end`,
+  `./manifest/back-end`
+].map(async manifest => {
+  await bootstrap(require(manifest)(settings))
+})
 
 async function bootstrap (manifest) {
   const worker = await Glue.compose(manifest, options)
